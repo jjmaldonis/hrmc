@@ -1,0 +1,20 @@
+LAMMPS (29 Sep 2011)
+units           metal
+boundary        p p p
+
+atom_style      atomic
+
+read_data       model_update_9397_2270000.dat
+  orthogonal box = (-14.1421 -14.1421 -14.1421) to (14.1421 14.1421 14.1421)
+  1 by 1 by 1 processor grid
+  1523 atoms
+
+pair_style      eam/alloy
+pair_coeff      * * ZrCuAl2011.eam.alloy Cu Al Zr
+
+#compute all all pe
+compute pot all pe
+
+#set atom 1 x 0.0 y 0.0 z 0.0
+
+#minimize 0 0 0 0
