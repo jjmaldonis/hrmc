@@ -1,18 +1,21 @@
-# Object files
-*.o
-*.ko
-
-# Libraries
-*.lib
-*.a
-
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so
-*.so.*
-*.dylib
-
-# Executables
-*.exe
-*.out
-*.app
+rmc*.e*
+rmc*.o*
+gr_initial&
+vk_initial*
+energy_*
+gr_update*
+model_update*
+time_elapsed*
+vk_update*
+param_file_BAK.in
+param_file_al50k.in
+resize_pix_outputs/
+temp.tmp
+acceptance_rate_*
+beta_weighting_*
+chi_squared_*
+timings/
+log.lammps
+log.simple
+src/ran2__genmod.f90
+*.restart

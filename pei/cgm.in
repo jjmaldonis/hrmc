@@ -1,0 +1,20 @@
+units		metal
+boundary	p p p
+
+atom_style	atomic
+
+read_data	Zr54Cu38Al8_t1_final.dat
+
+#mass 		1  91.22
+#mass		2  63.55
+#mass		3  26.98
+
+pair_style	eam/alloy
+pair_coeff	* * ../ZrCuAl2011.eam.alloy Zr Cu Al
+
+thermo_style	custom step etotal fmax fnorm
+thermo		1
+
+minimize	1.0e-6 0 1000 10000
+
+write_restart	lmp_emin_exp.restart

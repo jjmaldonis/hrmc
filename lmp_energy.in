@@ -1,0 +1,12 @@
+units           metal
+boundary        p p p
+
+atom_style      atomic
+
+read_data       pei/Zr54Cu38Al8_1523atoms_start.dat
+
+pair_style      eam/alloy
+pair_coeff      * * ZrCuAl2011.eam.alloy Cu Al Zr
+
+compute pot all pe
+#minimize 0 0 100 100
