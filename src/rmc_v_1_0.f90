@@ -94,6 +94,10 @@ program rmc
 
     !------------------- Program setup. -----------------!
 
+#ifdef TIMING
+    write(*,*) "Using timing version of code!"
+#endif
+
     call mpi_init_thread(MPI_THREAD_MULTIPLE, ipvd, mpierr) !http://www.open-mpi.org/doc/v1.5/man3/MPI_Init_thread.3.php
     call mpi_comm_rank(mpi_comm_world, myid, mpierr)
     call mpi_comm_size(mpi_comm_world, numprocs, mpierr)
@@ -289,11 +293,13 @@ endif
 
             if(myid .eq. 0) write(*,*) "Starting step", i
 
-            !if( i > 100) then
-            !    if(myid .eq. 0) write(*,*) "STOPPING MC AFTER 100 STEPS"
-            !    call mpi_finalize(mpierr)
-            !    stop ! Stop after 100 steps for timing runs.
-            !endif
+#ifdef TIMING
+            if( i > 100) then
+                if(myid .eq. 0) write(*,*) "STOPPING MC AFTER 100 STEPS"
+                call mpi_finalize(mpierr)
+                stop ! Stop after 100 steps for timing runs.
+            endif
+#endif
 
             call random_move(m,w,xx_cur,yy_cur,zz_cur,xx_new,yy_new,zz_new, max_move)
             ! check_curoffs returns false if the new atom placement is too close to
@@ -415,7 +421,6 @@ endif
                 ! Write to time_elapsed
                 open(35,file=trim(time_elapsed),form='formatted',status='unknown',access='append')
                     t1 = omp_get_wtime()
-                write(35,*) "Step, Time elapsed, Avg time per step, This step's time"
                     write (35,*) i, t1-t0, (t1-t0)/i, t1-t2
                 close(35)
             endif

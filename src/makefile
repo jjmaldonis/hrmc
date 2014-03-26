@@ -13,7 +13,7 @@ LMP_LIB = ../lammps_src/liblammps_odie.a -lmpi_cxx -lstdc++ -lm
 LMP_INC = -I../lammps_src/ -I../lammps_src/fortran2
 endif
 
-TIMING = -DTIMING #Uncomment if you want to do timing tests
+#TIMING = -DTIMING #Uncomment if you want to do timing tests
 
 LIBS=
 
@@ -31,13 +31,18 @@ CC = icc
 
 # Opt is at the top to make it the default
 # Need to define compiler flags for opt / debug
-opt: FCFLAGS = -O2 -openmp -fpp $(USE_LMP)
+opt: FCFLAGS = -O2 -openmp -fpp $(USE_LMP) $(TIMING)
 opt: CCFLAGS = -O2
 opt: ${APP}
 
 debug: FCFLAGS = -g -debug all -check all -implicitnone -warn all -openmp -fpp $(USE_LMP)
 debug: CCFLAGS = -debug all -g
 debug: ${APP}
+
+timing: FCFLAGS = -O2 -openmp -fpp $(USE_LMP) $(TIMING)
+timing: CCFLAGS = -O2
+timing: TIMING = -DTIMING
+timing: ${APP}
 
 ${APP}: ${OBJ}
 	${FC} ${LMP_OBJ} ${LMP_LIB} ${OBJ} ${FCFLAGS} -o ${APP}
