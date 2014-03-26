@@ -5,41 +5,46 @@ APP = ../rmc
 APP_FILE = rmc_v_1_0.f90
 
 SRC = ran2.f90 globals.f90 read_inputs_v2.f90 model_v2.f90 rmc_functions.f90 scattering_factors.f90 fft2dc.c slicelib.c islice.c fem1_v2.f90 gr.f90 eam.f90
+OBJ = $(addsuffix .o, $(basename $(SRC)))
 
-OBJ = ran2.o   globals.o   read_inputs_v2.o   model_v2.o   rmc_functions.o   scattering_factors.o   fft2dc.o slicelib.o islice.o fem1_v2.o   gr.o   eam.o
-
+#USE_LMP = -DUSE_LMP #Uncomment if you want to use lammps
+ifdef USE_LMP
 LMP_OBJ = ../lammps_src/fortran2/LAMMPS.o ../lammps_src/fortran2/LAMMPS-wrapper.o
 LMP_LIB = ../lammps_src/liblammps_odie.a -lmpi_cxx -lstdc++ -lm
 LMP_INC = -I../lammps_src/ -I../lammps_src/fortran2
+endif
+
+TIMING = -DTIMING #Uncomment if you want to do timing tests
 
 LIBS=
 
-CFLAGS = -O2 -openmp -fpp
-CDEBUGFLAGS = -g -debug all -check all -implicitnone -warn all -O2 -openmp -fpp
-
-FC_OPT = mpif90
-CC_OPT = icc
-
-FC_DEBUG = mpif90 -g -debug all -check all -implicitnone -warn all
-CC_DEBUG = icc -g  -Wall
+FC = mpif90
+CC = icc
 
 
+.PHONY: opt debug clean
 .SUFFIXES: .f90 .c .o
-%.o: %.mod
+# Set default ways of creating .o files from .f90 and .c files
+%.o: %.f90
+	${FC} -c $< ${FCFLAGS} ${LMP_INC}
+%.o: %.c
+	${CC} -c $< ${CCFLAGS}
 
-all: ${OBJ} ${APP_FILE:.f90=.o} ${APP}
+# Opt is at the top to make it the default
+# Need to define compiler flags for opt / debug
+opt: FCFLAGS = -O2 -openmp -fpp $(USE_LMP)
+opt: CCFLAGS = -O2
+opt: ${APP}
 
-.f90.o:
-	${FC_OPT} -c $< ${LMP_INC}
+debug: FCFLAGS = -g -debug all -check all -implicitnone -warn all -openmp -fpp $(USE_LMP)
+debug: CCFLAGS = -debug all -g
+debug: ${APP}
 
-${APP}: ${OBJ} ${APP_FILE:.f90=.o}
-	${FC_OPT} ${LMP_OBJ} ${LMP_LIB} ${OBJ} ${APP_FILE:.f90=.o} ${CFLAGS} -o ${APP}
+${APP}: ${APP_FILE}
+	${FC} ${LMP_OBJ} ${LMP_LIB} ${OBJ} ${APP_FILE:.f90=.o} ${FCFLAGS} -o ${APP}
 
 ${APP_FILE}: ${OBJ}
-	${FC_OPT} -c ${APP_FILE} ${LMP_INC}
-
-.c.o:
-	${CC_OPT} -c $<
+	${FC} -c ${APP_FILE} ${FCFLAGS} ${LMP_INC}
 
 clean:
 	rm -f *.mod *.o ${APP}

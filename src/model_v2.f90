@@ -1141,6 +1141,8 @@ contains
         integer, intent(in) :: atom
         real, intent(in) :: xx, yy, zz
         integer :: hx, hy, hz
+        ! TODO dont nec need to rem and add every time
+        ! eh that makes things more diff to program tho
         call hutch_remove_atom(m, atom)
         call hutch_position(m, xx, yy, zz, hx, hy, hz)
         call hutch_add_atom(m, atom, hx, hy, hz)

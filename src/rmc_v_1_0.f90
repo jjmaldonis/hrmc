@@ -27,7 +27,9 @@
 
 program rmc
 
-    !use LAMMPS
+#ifdef USE_LMP
+    use LAMMPS
+#endif
     use omp_lib
     use rmc_global
     use readinputs
@@ -39,10 +41,12 @@ program rmc
     implicit none
     include 'mpif.h'
     ! LAMMPS objects
-    !type (C_ptr) :: lmp
-    !real (C_double), pointer :: te1 => NULL()
-    !real (C_double), pointer :: te2 => NULL()
-    !character (len=512) :: lmp_cmd_str
+#ifdef USE_LMP
+    type (C_ptr) :: lmp
+    real (C_double), pointer :: te1 => NULL()
+    real (C_double), pointer :: te2 => NULL()
+    character (len=512) :: lmp_cmd_str
+#endif
     ! RMC / Femsim objects
     type(model) :: m
     character (len=256) :: model_filename
@@ -78,12 +82,14 @@ program rmc
     integer :: total_steps
     integer :: iseed2
     real :: randnum
+#ifndef USE_LMP
     real :: te1, te2 ! For eam, not lammps version of energy
+#endif
     logical :: square_pixel, accepted, use_rmc, use_multislice
     integer :: ipvd, nthr
     doubleprecision :: t0, t1, t2 !timers
     real :: x! This is the parameter we will use to fit vsim to vas.
-    integer, dimension(100) :: acceptance_array
+    integer, dimension(1000) :: acceptance_array
     real :: avg_acceptance = 1.0
 
     !------------------- Program setup. -----------------!
@@ -92,10 +98,12 @@ program rmc
     call mpi_comm_rank(mpi_comm_world, myid, mpierr)
     call mpi_comm_size(mpi_comm_world, numprocs, mpierr)
 
-    !if(myid.eq.0) then
-    !call lammps_open ('lmp -log log.simple -screen none', mpi_comm_world, lmp)
-    !call lammps_file (lmp, 'lmp_energy.in')
-    !endif
+#ifdef USE_LMP
+    if(myid.eq.0) then
+        call lammps_open ('lmp -log log.simple -screen none', mpi_comm_world, lmp)
+        call lammps_file (lmp, 'lmp_energy.in')
+    endif
+#endif
 
     nthr = omp_get_max_threads()
     if(myid.eq.0)then
@@ -106,6 +114,7 @@ program rmc
         write(*,*) "OMP found a max number of threads of", nthr
         write(*,*)
     endif
+
     call get_command_argument(1, c, length, istat)
     if (istat == 0) then
         jobID = "_"//trim(c)
@@ -124,6 +133,7 @@ program rmc
     param_filename = 'param_file.in'
     !call execute_command_line("cat param_file.in")
 
+if(myid .eq. 0) then
     ! Set output filenames.
     outbase = ""
     write(time_elapsed, "(A12)") "time_elapsed"
@@ -148,6 +158,7 @@ program rmc
     acceptance_rate_fn = trim(trim(acceptance_rate_fn)//jobID)//".txt"
     write(beta_fn, "(A14)") "beta_weighting"
     beta_fn = trim(trim(beta_fn)//jobID)//".txt"
+endif
 
     !------------------- Read inputs and initialize. -----------------!
     
@@ -166,38 +177,46 @@ program rmc
         r_x, vk_exp, k, vk_exp_err, v_background, ntheta, nphi, npsi, &
         scale_fac_initial, Q, fem_algorithm, pixel_distance, total_steps, &
         rmin_e, rmax_e, rmin_n, rmax_n, rmin_x, rmax_x, status2)
+    call mpi_bcast(temperature, 1, mpi_real, 0, mpi_comm_world, mpierr)
+    call mpi_bcast(scale_fac_initial, 1, mpi_real, 0, mpi_comm_world, mpierr)
+    call mpi_bcast(Q, 1, mpi_real, 0, mpi_comm_world, mpierr)
+    call mpi_bcast(k, size(k), mpi_real, 0, mpi_comm_world, mpierr)
 
-    if(myid .eq. 0) write(*,*) "Model filename: ", trim(model_filename)
-    if(myid .eq. 0) write(*,*)
+if(myid .eq. 0) then
+    write(*,*) "Model filename: ", trim(model_filename)
+    write(*,*)
+endif
 
     scale_fac = scale_fac_initial
     res = 0.61/Q
     nk = size(k)
     beta=1./((8.6171e-05)*temperature)
-
     iseed2 = 104756
-    if(myid .eq. 0) write(*,*) "random number generator seed =", iseed2
-
+    if(myid.eq.0) write(*,*) "random number generator seed =", iseed2
     square_pixel = .TRUE. ! RMC uses square pixels, not round.
     use_rmc = .TRUE.
     use_multislice = .FALSE.
 
+if(myid .eq. 0) then
+#ifdef USE_LMP
+    call lammps_command (lmp, 'run 0')
+    call lammps_extract_compute (te1, lmp, 'pot', 0, 0)
+#else
     call read_eam(m)
     call eam_initial(m,te1)
-    !if(myid.eq.0) then
-    !call lammps_command (lmp, 'run 0')
-    !call lammps_extract_compute (te1, lmp, 'pot', 0, 0)
-    !call mpi_bcast(te1, 1, mpi_real, 0, mpi_comm_world, mpierr)
-    !endif
-    if(myid.eq.0) write(*,*) "Energy = ", te1
+#endif
+    call mpi_bcast(te1, 1, mpi_real, 0, mpi_comm_world, mpierr)
+    write(*,*) "Energy = ", te1
+endif
 
-    call scatt_power(m,used_data_sets,istat)
-    !call gr_initialize(m,r_e,gr_e,r_n,gr_n,r_x,gr_x,used_data_sets,istat)
+if(myid .gt. 0 .or. numprocs .eq. 1) then
     call fem_initialize(m, res, k, nk, ntheta, nphi, npsi, scatfact_e, istat,  square_pixel)
     allocate(vk(size(vk_exp)), vk_as(size(vk_exp)))
-    if(myid.eq.0) call print_sampled_map(m, res, square_pixel)
+    vk = 0.0; vk_as = 0.0
+
     ! Print warning message if we are using too many cores.
-    if(myid.eq.0) then
+    if(myid.eq.1 .or. myid.eq.0) then
+        call print_sampled_map(m, res, square_pixel)
         if(pa%npix /= 1) then
             if(numprocs > 3*nrot) write(*,*) "WARNING: You are using too many cores!"
         else
@@ -208,21 +227,26 @@ program rmc
     !------------------- Call femsim. -----------------!
 
     ! Fem updates vk based on the intensity calculations and v_background.
+write(*,*) "DEBUG RMC 0.0"
     call fem(m, res, k, vk, vk_as, v_background, scatfact_e, mpi_comm_world, istat, square_pixel)
-    ! TODO !!! Make sure I am actually supposed to be updating scale_fac and not ! weights(4) instead!!! That would be real bad.
-    !call update_scale_factor(scale_fac, scale_fac_initial, vk, vk_as)
+write(*,*) "DEBUG RMC 0.1"
+write(*,*) "DEBUG RMC 0.2", vk
+    ! Note: vk is reduced to myid=0 in fem() and fem_update()
+    call mpi_bcast(vk,size(vk),mpi_real,0,mpi_comm_world,mpierr)
+    !call mpi_send(vk,size(vk),mpi_real,0,istat,mpi_comm_world,mpierr)
+write(*,*) "DEBUG RMC 0.3", vk
+endif
+    call mpi_barrier(mpi_comm_world, mpierr)
+    !call mpi_barrier(mpi_comm_world, mpierr)
+    !call mpi_barrier(mpi_comm_world, mpierr)
+    ! NOTE: See rmc.34257.out  == 1 barrier
+    ! and rmc.34256.out  == 3 barriers
+    ! There is a difference!!! WHAT?!?!
 
     t1 = omp_get_wtime()
     if(myid.eq.0)then
         write(*,*) "Femsim took", t1-t0, "seconds on processor", myid
 
-        ! Write initial gr
-        !open(unit=51,file=trim(gri_fn),form='formatted',status='unknown')
-        !    do i=1, mbin_x
-        !        R = del_r_x*(i)-del_r_x
-        !        write(51,*)R, gr_x_sim_cur(i)
-        !    enddo
-        !close(51)
         ! Write initial vk 
         open(unit=52,file=trim(vki_fn),form='formatted',status='unknown')
 !            write(*,*) "Writing V(k)."
@@ -235,7 +259,7 @@ program rmc
 
     !------------------- Start RMC. -----------------!
 
-    call mpi_barrier(mpi_comm_world, mpierr)
+if(myid .eq. 0) then
     open(20, file=param_filename,iostat=istat, status='old')
         read(20, '(a80)') comment !read comment from paramfile
         read(20, '(a80)') comment !model filename
@@ -243,23 +267,19 @@ program rmc
         read(20, *) temperature !starting temp when i = 1
     close(20)
     temperature = temperature * sqrt(0.7)**int(i/50000)
+endif
 
     if(use_rmc) then ! End here if we only want femsim. Set the variable above.
 
+if(myid .eq. 0) then
         ! Calculate initial chi2
         chi2_no_energy = chi_square(used_data_sets,weights,gr_e, gr_e_err, gr_n, gr_x, vk_exp, vk_exp_err, &
             gr_e_sim_cur, gr_n_sim_cur, gr_x_sim_cur, vk, scale_fac,&
             rmin_e, rmax_e, rmin_n, rmax_n, rmin_x, rmax_x, del_r_e, del_r_n, del_r_x, nk, chi2_gr, chi2_vk)
 
-        !! If fem data is the only input data set we can set its weighting factor here.
-        !if(.not. used_data_sets(1) .and. .not. used_data_sets(2) .and. .not.  used_data_sets(3) .and. used_data_sets(4) ) then
-        !    weights(4) = -1*te1/chi2_no_energy
-        !    chi2_no_energy = chi_square(used_data_sets,weights,gr_e, gr_e_err, gr_n, gr_x, vk_exp, vk_exp_err, &
-        !        gr_e_sim_cur, gr_n_sim_cur, gr_x_sim_cur, vk, scale_fac,&
-        !        rmin_e, rmax_e, rmin_n, rmax_n, rmin_x, rmax_x, del_r_e, del_r_n, del_r_x, nk, chi2_gr, chi2_vk)
-        !endif
         chi2_old = chi2_no_energy + te1
         e2 = e1 ! eam
+endif
 
         t0 = omp_get_wtime()
         if(myid.eq.0)then
@@ -270,35 +290,24 @@ program rmc
             write(*,*) "   Energy =     ", te1
             write(*,*) "   Temperature =", temperature
             write(*,*)
-        endif
-
-        ! Reset time_elapsed, energy_function, chi_squared_file
-        if(myid .eq. 0) then
-        open(35,file=trim(time_elapsed),form='formatted',status='unknown')
-            t1 = omp_get_wtime()
-            write(35,*) numprocs, "processors are being used."
-            write(35,*) "Step || Time elapsed || Avg time per step || This step's time || Approx time remaining"
-        close(35)
-        !open(34,file=trim(energy_fn),form='formatted',status='unknown')
-        !    write(34,*) "step, energy"
-        !    write(34,*) i, te1
-        !close(34)
-        open(36,file=trim(chi_squared_file),form='formatted',status='unknown')
-            write(36,*) "step, chi2, energy, chi2-energy, chi2/energy, alpha weight, beta weight"
-            write(36,*) i, chi2_no_energy, te1, chi2_old, abs(chi2_no_energy/te1), weights(4), scale_fac
-        close(36)
-        open(37,file=trim(acceptance_rate_fn),form='formatted',status='unknown',access='append')
-            write(37,*) "step, acceptance rate averaged over last 100 steps"
-        close(37)
-        !open(38,file=trim(beta_fn),form='formatted',status='unknown',access='append')
-        !write(38,*) "Sum(V_exp)/Sum(V_sim). I.e. what beta should be. If it stays constant that is great - that'    s what we want beta to be! (rather an 3*te/ts)"
-        !close(38)
+            ! Reset time_elapsed, energy_function, chi_squared_file
+            open(35,file=trim(time_elapsed),form='formatted',status='unknown')
+                t1 = omp_get_wtime()
+                write(35,*) numprocs, "processors are being used."
+                write(35,*) "Step, Time elapsed, Avg time per step, This step's time"
+            close(35)
+            open(36,file=trim(chi_squared_file),form='formatted',status='unknown')
+                write(36,*) "step, chi2, energy"
+                write(36,*) i, chi2_no_energy, te1
+            close(36)
+            open(37,file=trim(acceptance_rate_fn),form='formatted',status='unknown',access='append')
+                write(37,*) "step, acceptance rate averaged over last 1000 steps"
+            close(37)
         endif
 
 
         i=0
-        ! RMC loop begins.
-        ! The loops stops if the temperature goes below a certain temp (30.0).
+        ! RMC loop begins. The loop never stops.
         do while (i .ge. 0)
             i=i+1
             t2 = omp_get_wtime()
@@ -311,6 +320,7 @@ program rmc
             !    stop ! Stop after 100 steps for timing runs.
             !endif
 
+            ! Do this on every core. Right?
             call random_move(m,w,xx_cur,yy_cur,zz_cur,xx_new,yy_new,zz_new, max_move)
             ! check_curoffs returns false if the new atom placement is too close to
             ! another atom. Returns true if the move is okay. (hard shere cutoff)
@@ -321,22 +331,24 @@ program rmc
                 m%zz%ind(w) = zz_cur
                 call random_move(m,w,xx_cur,yy_cur,zz_cur,xx_new,yy_new,zz_new, max_move)
             end do
+write(*,*) "I am core", myid, "and I moved atom", w, xx_new,yy_new,zz_new
 
             ! Update hutches, data for chi2, and chi2/del_chi
             call hutch_move_atom(m,w,xx_new, yy_new, zz_new)
-            !write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", w, " x ", xx_new, " y ", yy_new, " z ", zz_new
-            !if(myid.eq.0) then
-            !call lammps_command(lmp, trim(lmp_cmd_str))
-            !endif
     
-
+if(myid.eq.0) then
+#ifdef USE_LMP
+            write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", w, " x ", xx_new, " y ", yy_new, " z ", zz_new
+            call lammps_command(lmp, trim(lmp_cmd_str))
+            call lammps_command (lmp, 'run 0')
+            call lammps_extract_compute (te2, lmp, 'pot', 0, 0)
+#else
             call eam_mc(m, w, xx_cur, yy_cur, zz_cur, xx_new, yy_new, zz_new, te2)
-            !if(myid.eq.0) then
-            !call lammps_command (lmp, 'run 0')
-            !call lammps_extract_compute (te2, lmp, 'pot', 0, 0)
-            !endif
+#endif
             call mpi_bcast(te2, 1, mpi_real, 0, mpi_comm_world, mpierr)
             write(*,*) "Energy = ", te2
+endif
+if(myid .gt. 0 .or. numprocs .eq. 1) then
             ! Use multislice every 10k steps if specified.
             if(use_multislice .and. mod(i,10000) .eq. 0) then
                 call fem_update(m, w, res, k, vk, vk_as, v_background, scatfact_e, mpi_comm_world, istat, square_pixel, .true.)
@@ -345,8 +357,10 @@ program rmc
                 call fem_update(m, w, res, k, vk, vk_as, v_background, scatfact_e, mpi_comm_world, istat, square_pixel, .false.)
                 !write(*,*) "I am core", myid, "and I have exited from fem_update into the main rmc block."
             endif
-            !if(myid .eq. 0) write(*,*) "Finished updating eam, gr, and fem data."
-            
+endif
+call mpi_barrier(mpi_comm_world, mpierr)
+if(myid.eq.0) then
+            !write(*,*) "I am core", myid, "and I am past mpi_barrier.", del_chi
             chi2_no_energy = chi_square(used_data_sets,weights,gr_e, gr_e_err, &
                 gr_n, gr_x, vk_exp, vk_exp_err, gr_e_sim_new, gr_n_sim_new, &
                 gr_x_sim_new, vk, scale_fac, rmin_e, rmax_e, rmin_n, rmax_n, &
@@ -354,53 +368,58 @@ program rmc
 
             chi2_new = chi2_no_energy + te2
             del_chi = chi2_new - chi2_old
-
-            call mpi_barrier(mpi_comm_world, mpierr) ! Pretty sure this is unnecessary
             call mpi_bcast(del_chi, 1, mpi_real, 0, mpi_comm_world, mpierr)
-            !write(*,*) "I am core", myid, "and I am past mpi_bcast.", del_chi
-               
+endif
+
             randnum = ran2(iseed2)
+write(*,*) "Core",myid,"randnum=",randnum
             ! Test if the move should be accepted or rejected based on del_chi
             if(del_chi <0.0)then
             !if(.true.)then !For timing purposes, always accept the move. TODO
                 ! Accept the move
-                e1 = e2 ! eam
                 call fem_accept_move(mpi_comm_world)
+                if(myid.eq.0) then
+                e1 = e2 ! eam
                 chi2_old = chi2_new
                 accepted = .true.
-                if(myid .eq. 0) write(*,*) "MC move accepted outright."
+                write(*,*) "MC move accepted outright."
+                endif
             else
                 ! Based on the random number above, even if del_chi is negative, decide
                 ! whether to move or not (statistically).
                 if(log(1.-randnum)<-del_chi*beta)then
                     ! Accept move
-                    e1 = e2 ! eam
                     call fem_accept_move(mpi_comm_world)
+                    if(myid.eq.0) then
+                    e1 = e2 ! eam
                     chi2_old = chi2_new
                     accepted = .true.
-                    if(myid.eq.0) write(*,*) "MC move accepted due to probability. del_chi*beta = ", del_chi*beta
+                    write(*,*) "MC move accepted due to probability. del_chi*beta = ", del_chi*beta
+                    endif
                 else
                     ! Reject move
-                    e2 = e1 ! eam
                     call reject_position(m, w, xx_cur, yy_cur, zz_cur)
                     call hutch_move_atom(m,w,xx_cur, yy_cur, zz_cur)  !update hutches.
                     call fem_reject_move(m, w, xx_cur, yy_cur, zz_cur, mpi_comm_world)
+                    if(myid.eq.0) then
+                    e2 = e1 ! eam
                     accepted = .false.
-                    if(myid .eq. 0) write(*,*) "MC move rejected."
+                    write(*,*) "MC move rejected."
+                    endif
                 endif
             endif
 
+if(myid.eq.0) then
             if(accepted) then
-                acceptance_array(mod(i,100)+1) = 1
+                acceptance_array(mod(i,1000)+1) = 1
             else
-                acceptance_array(mod(i,100)+1) = 0
+                acceptance_array(mod(i,1000)+1) = 0
             endif
-            if(i .gt. 100) avg_acceptance = sum(acceptance_array)/100.0
+            if(i .gt. 1000) avg_acceptance = sum(acceptance_array)/1000.0
             ! Writing to 0 is stderr
-            if(i .gt. 100 .and. avg_acceptance .le. 0.05) write(0,*) "WARNING!  Acceptance rate is low:", avg_acceptance
+            if(i .gt. 1000 .and. avg_acceptance .le. 0.05) write(0,*) "WARNING!  Acceptance rate is low:", avg_acceptance
 
             ! Periodically save data.
-            if(myid.eq.0)then
             if(mod(i,1000)==0)then
                 ! Write to vk_update
                 !write(vku_fn, "(A9)") "vk_update"
@@ -412,6 +431,7 @@ program rmc
                 !    enddo
                 !close(32)
                 ! Write to model_update
+                ! This takes a bit of time.
                 write(output_model_fn, "(A12)") "model_update"
                 write(step_str,*) i
                 output_model_fn = trim(trim(trim(trim(output_model_fn)//jobID)//"_")//step_str)//".xyz"
@@ -426,63 +446,37 @@ program rmc
             endif
             if(mod(i,1)==0)then
                 if(accepted) then
-                    ! Write to energy_function
-                    !open(34,file=trim(energy_fn),form='formatted',status='unknown',access='append')
-                    !    write(*,*) i, te2
-                    !    write(34,*) i, te2
-                    !close(34)
                     ! Write chi2 info
                     open(36,file=trim(chi_squared_file),form='formatted',status='unknown',access='append')
-                        write(36,*) i, chi2_no_energy, te2, chi2_old, abs(chi2_no_energy/te2), weights(4), scale_fac
+                        write(36,*) i, chi2_no_energy, te2
                     close(36)
                 endif
             endif
             if(mod(i,1)==0)then
-                !open(36,file=trim(beta_fn),form='formatted',status='unknown',access='append')
-                !    write(36,*) sum(vk_exp)/sum(vk)
-                !close(36)
                 ! Write to time_elapsed
                 open(35,file=trim(time_elapsed),form='formatted',status='unknown',access='append')
                     t1 = omp_get_wtime()
-                    !write(*,*) "Step, time elapsed, temp:", i, t1-t0, temperature
-                    write (35,*) i, t1-t0, (t1-t0)/i, t1-t2, (t1-t0)/i * (150000 * log(30/temperature)/log(sqrt(0.7)) - i)
+                write(35,*) "Step, Time elapsed, Avg time per step, This step's time"
+                    write (35,*) i, t1-t0, (t1-t0)/i, t1-t2
                 close(35)
-                !write(*,*) "Time per step = ", (t1-t0)/(i)
-                !write(*,*) "This step's time = ", t1-t2
-                ! Time per step * num steps before decreasing temp * num
-                ! drops in temp necessary to get to temp=30.
-                !write(*,*) "Approximate time remaining in seconds:", (t1-t0)/i * (150000 * log(30/temperature)/log(sqrt(0.7)) - i)! / nthr
-                !write(*,*) "Approximate time remaining in seconds (for 100 steps):", (t1-t0)/i * (100-i)! / nthr
             endif
-            if(mod(i,100)==0 .and. i .gt. 100)then
+            if(mod(i,1000)==0 .and. i .gt. 100)then
                 ! Write to acceptance rate
                 open(40,file=trim(acceptance_rate_fn),form='formatted',status='unknown',access='append')
                     write(40,*) i, avg_acceptance
                 close(40)
             endif
-            endif ! myid == 0
+endif ! myid == 0
 
             ! Every 50,000 steps lower the temp, max_move, and reset beta.
             if(mod(i,50000)==0)then
                 temperature = temperature * sqrt(0.7)
-                if(myid.eq.0)then
-                    write(*,*) "Lowering temp to", temperature, "at step", i
-                endif
+                if(myid.eq.0) write(*,*) "Lowering temp to", temperature, "at step", i
                 max_move = max_move * sqrt(0.94)
                 beta=1./((8.6171e-05)*temperature)
-                !if(myid.eq.0)then
-                !    if(temperature.lt.30.0)then
-                !        if(myid.eq.0)then
-                !            write(*,*) "STOPPING MC DUE TO TEMP"
-                !        endif
-                !        stop
-                !    endif
-                !endif
             endif
             
-            !if(myid .eq. 0) write(*,*) "Finished step", i
         enddo !RMC do loop
-
         write(*,*) "Monte Carlo Finished!"
 
         ! The rmc loop finished. Write final data.
@@ -513,9 +507,11 @@ program rmc
             close(57)
         endif
     endif ! Use RMC
-    !if(myid.eq.0) then
-    !call lammps_close (lmp)
-    !endif
+#ifdef USE_LMP
+    if(myid.eq.0) then
+    call lammps_close (lmp)
+    endif
+#endif
     call mpi_finalize(mpierr)
 
 end program rmc

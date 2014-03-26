@@ -1,5 +1,5 @@
 #parameter file opened. set a filename to # to ignore it
-pei/Zr54Cu38Al8_t3_final.xyz
+pei/Zr50Cu35Al15_t3_final.cgm.xyz
 1  !starting step number
 200000.0    !starting temperature (assuming starting step is 1, not what you set it at)
 1.5    !maximum move distance
@@ -19,7 +19,7 @@ pei/Zr54Cu38Al8_t3_final.xyz
 pei/fem_exp_Zr54Cu38Al8_t3.txt
 550.0	 !weight of fem; alpha
 28.6378  !scaling factor for exp Vk; beta
-1 40 20 	 !# of rotations(nphi, npsi, ntheta)
+1 10 1 	 !# of rotations(nphi, npsi, ntheta) 1 40 20
 0.0305 !Q (inverse angstrom)
 1	 !fem algorithm
 13.0	 !pixel distance

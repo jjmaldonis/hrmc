@@ -431,6 +431,7 @@ contains
     end subroutine rotation_for_checking
 
     subroutine ompare_models(m1,m2)
+        ! Name 'compare_models' didn't work.
         implicit none
         type(model), intent(in) :: m1,m2
         integer :: i,j
@@ -473,6 +474,7 @@ contains
         integer :: i, j
         integer begin_rot, end_rot
         logical :: pixel_square, use_autoslice
+write(*,*) "DEBUG FEM 0: In fem routine", myid
 
         if(present(square_pixel)) then
             pixel_square = square_pixel
@@ -505,75 +507,84 @@ contains
 
         ! initialize the rotated models
         ! Also allocate room for mcopy - Jason 20130731
-        allocate(mcopy(nrot), stat=istat)
-        call check_allocation(istat, 'Cannot allocate copy model array.')
+        !allocate(mcopy(nrot), stat=istat)
+        !call check_allocation(istat, 'Cannot allocate copy model array.')
         allocate(mrot(nrot), stat=istat)
         call check_allocation(istat, 'Cannot allocate rotated model array.')
 
         ! Calculate all the rotated models and save them in mrot.
         ! This is actually really fast.
-        do i=myid+1, nrot, numprocs
+        !do i=myid+1, nrot, numprocs
+        do i=myid, nrot, numprocs-1
             call rotate_model(rot(i, 1), rot(i, 2), rot(i, 3), m, mrot(i), istat)
             call check_allocation(istat, 'Failed to rotate model')
             mrot(i)%id = i
         enddo
 
         ! Initialize the copies from the rotated models for fem_accept/reject.
-        do i=myid+1, nrot, numprocs
-            call copy_model(mrot(i), mcopy(i))
-        enddo
+        !do i=myid+1, nrot, numprocs
+        !    call copy_model(mrot(i), mcopy(i))
+        !enddo
 
         allocate(old_index(nrot), old_pos(nrot), stat=istat)
         call check_allocation(istat, 'Cannot allocate memory for old indices and positions in fem_initialize.')
+write(*,*) "DEBUG FEM 1:"
         ! Initialize old_index and old_pos arrays. The if statements should
         ! be unnecessary, but they don't hurt. Better safe than sorry.
-        do i=myid+1, nrot, numprocs
+        !do i=myid+1, nrot, numprocs
+        do i=myid, nrot, numprocs-1
             old_index(i)%nat = 0
             if( allocated(old_index(i)%ind) ) deallocate(old_index(i)%ind)
             old_pos(i)%nat = 0
             if( allocated(old_pos(i)%pos) ) deallocate(old_pos(i)%pos)
         enddo
 
+write(*,*) "DEBUG FEM 2:"
         use_autoslice = .false.
         ! Calculate intensities for every single pixel in every single model. This is very expensive.
         if(myid .eq. 0) then
             write(*,*); write(*,*) "Calculating intensities over the models: nrot = ", nrot; write(*,*)
         endif
-        do i=myid+1, nrot, numprocs
+        !do i=myid+1, nrot, numprocs
+        do i=myid, nrot, numprocs-1
             do j=1, pa%npix
-                !write(*,*) "Calling intensity on pixel (", pa%pix(j,1), ",",pa%pix(j,2), ") in rotated model ", i
+                write(*,*) "Calling intensity on pixel (", pa%pix(j,1), ",",pa%pix(j,2), ") in rotated model ", i, "with core", myid
                 call intensity(mrot(i), res, pa%pix(j, 1), pa%pix(j, 2), k, int_i(1:nk, j, i), int_i_as(1:nk, j, i), scatfact_e, istat, pixel_square, use_autoslice)
                 int_sq(1:nk, j, i) = int_i(1:nk, j, i)**2
                 if(use_autoslice) int_as_sq(1:nk, j, i) = int_i_as(1:nk, j, i)**2
-
-                !write(*,*) "DEBUG 1", psum_int(1:nk)
-                !write(*,*) "DEBUG 2", psum_int_as(1:nk)
                 psum_int(1:nk) = psum_int(1:nk) + int_i(1:nk, j, i)
                 psum_int_sq(1:nk) = psum_int_sq(1:nk) + int_sq(1:nk, j, i)
                 if(use_autoslice) psum_int_as(1:nk) = psum_int_as(1:nk) + int_i_as(1:nk, j, i)
                 if(use_autoslice) psum_int_as_sq(1:nk) = psum_int_as_sq(1:nk) + int_as_sq(1:nk, j, i)
-                !write(*,*) "DEBUG 3", psum_int(1:nk)
-                !write(*,*) "DEBUG 4", psum_int_as(1:nk)
             enddo
             !write(*,*) "Finished intensity calls on model", i
         enddo
+write(*,*) "DEBUG FEM 3:"
 
-        call mpi_barrier(comm, mpierr)
+        !call mpi_barrier(comm, mpierr)
         call mpi_reduce (psum_int, sum_int, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
         call mpi_reduce (psum_int_sq, sum_int_sq, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
         if(use_autoslice) call mpi_reduce (psum_int_as, sum_int_as, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
         if(use_autoslice) call mpi_reduce (psum_int_as_sq, sum_int_as_sq, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
 
-        if(myid.eq.0)then
-write(*,*) "Writing I(k):"
+write(*,*) "DEBUG FEM 4:", myid
+write(*,*) "DEBUG FEM 5:", myid
+write(*,*) "DEBUG FEM 6:", myid, vk
+!call mpi_barrier(comm, mpierr)
+        if(myid.eq.1)then
+write(*,*) "DEBUG FEM 6.1:"
+!write(*,*) "Writing I(k):"
             do i=1, nk
-write(*,*) k(i), sum_int(i)
+!write(*,*) k(i), sum_int(i)
                 Vk(i) = (sum_int_sq(i)/(pa%npix*nrot))/((sum_int(i)/(pa%npix*nrot))**2)-1.0
                 Vk(i) = Vk(i) - v_background(i)  ! background subtraction   052210 JWH
             end do
+            !call mpi_gather(vk, size(vk), mpi_real, vk, size(vk), mpi_real, 0, mpi_comm_world, mpierr)
+            call mpi_bcast(vk,size(vk),mpi_real,0,mpi_comm_world,mpierr)
+            write(*,*) "vk=",vk
+            write(*,*) "vk2=",vk
         endif
-        ! TODO MAKE SURE THIS IS RIGHT.
-        if(use_autoslice) then
+        if(use_autoslice .and. myid .eq. 1) then
             do i=1, nk
                 Vk_as(i) = (sum_int_as(i)**2/(pa%npix*nrot))/((sum_int_as(i)**2/(pa%npix*nrot))**2)-1.0
                 Vk_as(i) = Vk_as(i) - v_background(i)   !background subtraction 052210 JWH
@@ -582,7 +593,10 @@ write(*,*) k(i), sum_int(i)
                     Vk_as(i) = Vk_as(i) - v_background(i)   !background subtraction 052210 JWH
                 endif
             enddo
+            !call mpi_gather(vk_as, size(vk_as), mpi_real, 0, mpi_comm_world, mpierr)
+            call mpi_bcast(vk,size(vk),mpi_real,0,mpi_comm_world,mpierr)
         endif
+write(*,*) "DEBUG FEM 5:"
 
         deallocate(psum_int, psum_int_sq, sum_int, sum_int_sq)
 
@@ -1156,6 +1170,7 @@ write(*,*) k(i), sum_int(i)
         do i=myid+1, nrot, numprocs
             do m=1, pa%npix
                 if(update_pix(i,m)) then
+                    write(*,*) "Calling intensity in MC on pixel (", pa%pix(j,1), ",",pa%pix(j,2), ") in rotated model ", i, "with core", myid
                     call intensity(mrot(i), res, pa%pix(m, 1), pa%pix(m, 2), k, &
                         int_i(1:nk, m, i), int_i_as(1:nk, m, i), scatfact_e,istat, square_pixel, use_autoslice)
                     int_sq(1:nk, m, i) = int_i(1:nk, m, i)**2
@@ -1197,7 +1212,7 @@ write(*,*) k(i), sum_int(i)
         !write(*,*) "I am core", myid, "and I am past mp_reduce."
 
         ! Recalculate the variance
-        if(myid.eq.0)then
+        if(myid.eq.1)then
             do i=1, nk
                 Vk(i) = (sum_int_sq(i)/(pa%npix*nrot))/((sum_int(i)/(pa%npix*nrot))**2)-1.0
                 Vk(i) = Vk(i) - v_background(i)   !background subtraction 052210 JWH
@@ -1207,6 +1222,7 @@ write(*,*) k(i), sum_int(i)
                     Vk_as(i) = Vk_as(i) - v_background(i)   !background subtraction 052210 JWH
                 endif
             end do
+            call mpi_gather(vk, size(vk), mpi_real, vk, size(vk), mpi_real, 0, mpi_comm_world, mpierr)
         endif
 
         deallocate(moved_atom%xx%ind, moved_atom%yy%ind, moved_atom%zz%ind, moved_atom%znum%ind, moved_atom%atom_type, moved_atom%znum_r%ind, moved_atom%composition, stat=istat)
@@ -1309,6 +1325,7 @@ write(*,*) k(i), sum_int(i)
 
     subroutine checkers(m)
         ! Stupd name but i needed one
+        ! Runs compare_models to make sure they are the same
         type(model), intent(in) :: m
         integer :: i
         !write(*,*) "Rotating..."

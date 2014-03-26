@@ -14,6 +14,9 @@
 ##SBATCH --mem=16384                    # total RAM in MB, max 64GB  per node
 ##SBATCH --mem-per-cpu=4000              # RAM in MB (default 4GB, max 8GB)
 
+# set OMP_NUM_THREADS to the number of --cpus-per-task we asked for
+export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+
 ##SBATCH --export=ALL
 
 echo "Date:"
