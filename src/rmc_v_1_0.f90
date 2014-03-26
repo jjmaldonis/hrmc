@@ -177,15 +177,11 @@ endif
         r_x, vk_exp, k, vk_exp_err, v_background, ntheta, nphi, npsi, &
         scale_fac_initial, Q, fem_algorithm, pixel_distance, total_steps, &
         rmin_e, rmax_e, rmin_n, rmax_n, rmin_x, rmax_x, status2)
-    call mpi_bcast(temperature, 1, mpi_real, 0, mpi_comm_world, mpierr)
-    call mpi_bcast(scale_fac_initial, 1, mpi_real, 0, mpi_comm_world, mpierr)
-    call mpi_bcast(Q, 1, mpi_real, 0, mpi_comm_world, mpierr)
-    call mpi_bcast(k, size(k), mpi_real, 0, mpi_comm_world, mpierr)
 
-if(myid .eq. 0) then
+    if(myid .eq. 0) then
     write(*,*) "Model filename: ", trim(model_filename)
     write(*,*)
-endif
+    endif
 
     scale_fac = scale_fac_initial
     res = 0.61/Q
@@ -197,7 +193,6 @@ endif
     use_rmc = .TRUE.
     use_multislice = .FALSE.
 
-if(myid .eq. 0) then
 #ifdef USE_LMP
     call lammps_command (lmp, 'run 0')
     call lammps_extract_compute (te1, lmp, 'pot', 0, 0)
@@ -205,17 +200,14 @@ if(myid .eq. 0) then
     call read_eam(m)
     call eam_initial(m,te1)
 #endif
-    call mpi_bcast(te1, 1, mpi_real, 0, mpi_comm_world, mpierr)
-    write(*,*) "Energy = ", te1
-endif
+    if(myid .eq. 0) write(*,*) "Energy = ", te1
 
-if(myid .gt. 0 .or. numprocs .eq. 1) then
     call fem_initialize(m, res, k, nk, ntheta, nphi, npsi, scatfact_e, istat,  square_pixel)
     allocate(vk(size(vk_exp)), vk_as(size(vk_exp)))
     vk = 0.0; vk_as = 0.0
 
     ! Print warning message if we are using too many cores.
-    if(myid.eq.1 .or. myid.eq.0) then
+    if(myid.eq.0) then
         call print_sampled_map(m, res, square_pixel)
         if(pa%npix /= 1) then
             if(numprocs > 3*nrot) write(*,*) "WARNING: You are using too many cores!"
@@ -227,21 +219,7 @@ if(myid .gt. 0 .or. numprocs .eq. 1) then
     !------------------- Call femsim. -----------------!
 
     ! Fem updates vk based on the intensity calculations and v_background.
-write(*,*) "DEBUG RMC 0.0"
     call fem(m, res, k, vk, vk_as, v_background, scatfact_e, mpi_comm_world, istat, square_pixel)
-write(*,*) "DEBUG RMC 0.1"
-write(*,*) "DEBUG RMC 0.2", vk
-    ! Note: vk is reduced to myid=0 in fem() and fem_update()
-    call mpi_bcast(vk,size(vk),mpi_real,0,mpi_comm_world,mpierr)
-    !call mpi_send(vk,size(vk),mpi_real,0,istat,mpi_comm_world,mpierr)
-write(*,*) "DEBUG RMC 0.3", vk
-endif
-    call mpi_barrier(mpi_comm_world, mpierr)
-    !call mpi_barrier(mpi_comm_world, mpierr)
-    !call mpi_barrier(mpi_comm_world, mpierr)
-    ! NOTE: See rmc.34257.out  == 1 barrier
-    ! and rmc.34256.out  == 3 barriers
-    ! There is a difference!!! WHAT?!?!
 
     t1 = omp_get_wtime()
     if(myid.eq.0)then
@@ -259,7 +237,7 @@ endif
 
     !------------------- Start RMC. -----------------!
 
-if(myid .eq. 0) then
+    call mpi_barrier(mpi_comm_world, mpierr)
     open(20, file=param_filename,iostat=istat, status='old')
         read(20, '(a80)') comment !read comment from paramfile
         read(20, '(a80)') comment !model filename
@@ -267,11 +245,9 @@ if(myid .eq. 0) then
         read(20, *) temperature !starting temp when i = 1
     close(20)
     temperature = temperature * sqrt(0.7)**int(i/50000)
-endif
 
     if(use_rmc) then ! End here if we only want femsim. Set the variable above.
 
-if(myid .eq. 0) then
         ! Calculate initial chi2
         chi2_no_energy = chi_square(used_data_sets,weights,gr_e, gr_e_err, gr_n, gr_x, vk_exp, vk_exp_err, &
             gr_e_sim_cur, gr_n_sim_cur, gr_x_sim_cur, vk, scale_fac,&
@@ -279,7 +255,6 @@ if(myid .eq. 0) then
 
         chi2_old = chi2_no_energy + te1
         e2 = e1 ! eam
-endif
 
         t0 = omp_get_wtime()
         if(myid.eq.0)then
@@ -320,7 +295,6 @@ endif
             !    stop ! Stop after 100 steps for timing runs.
             !endif
 
-            ! Do this on every core. Right?
             call random_move(m,w,xx_cur,yy_cur,zz_cur,xx_new,yy_new,zz_new, max_move)
             ! check_curoffs returns false if the new atom placement is too close to
             ! another atom. Returns true if the move is okay. (hard shere cutoff)
@@ -331,12 +305,10 @@ endif
                 m%zz%ind(w) = zz_cur
                 call random_move(m,w,xx_cur,yy_cur,zz_cur,xx_new,yy_new,zz_new, max_move)
             end do
-write(*,*) "I am core", myid, "and I moved atom", w, xx_new,yy_new,zz_new
 
             ! Update hutches, data for chi2, and chi2/del_chi
             call hutch_move_atom(m,w,xx_new, yy_new, zz_new)
     
-if(myid.eq.0) then
 #ifdef USE_LMP
             write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", w, " x ", xx_new, " y ", yy_new, " z ", zz_new
             call lammps_command(lmp, trim(lmp_cmd_str))
@@ -345,10 +317,8 @@ if(myid.eq.0) then
 #else
             call eam_mc(m, w, xx_cur, yy_cur, zz_cur, xx_new, yy_new, zz_new, te2)
 #endif
-            call mpi_bcast(te2, 1, mpi_real, 0, mpi_comm_world, mpierr)
-            write(*,*) "Energy = ", te2
-endif
-if(myid .gt. 0 .or. numprocs .eq. 1) then
+            if(myid .eq. 0) write(*,*) "Energy = ", te2
+
             ! Use multislice every 10k steps if specified.
             if(use_multislice .and. mod(i,10000) .eq. 0) then
                 call fem_update(m, w, res, k, vk, vk_as, v_background, scatfact_e, mpi_comm_world, istat, square_pixel, .true.)
@@ -357,10 +327,7 @@ if(myid .gt. 0 .or. numprocs .eq. 1) then
                 call fem_update(m, w, res, k, vk, vk_as, v_background, scatfact_e, mpi_comm_world, istat, square_pixel, .false.)
                 !write(*,*) "I am core", myid, "and I have exited from fem_update into the main rmc block."
             endif
-endif
-call mpi_barrier(mpi_comm_world, mpierr)
-if(myid.eq.0) then
-            !write(*,*) "I am core", myid, "and I am past mpi_barrier.", del_chi
+
             chi2_no_energy = chi_square(used_data_sets,weights,gr_e, gr_e_err, &
                 gr_n, gr_x, vk_exp, vk_exp_err, gr_e_sim_new, gr_n_sim_new, &
                 gr_x_sim_new, vk, scale_fac, rmin_e, rmax_e, rmin_n, rmax_n, &
@@ -368,48 +335,39 @@ if(myid.eq.0) then
 
             chi2_new = chi2_no_energy + te2
             del_chi = chi2_new - chi2_old
-            call mpi_bcast(del_chi, 1, mpi_real, 0, mpi_comm_world, mpierr)
-endif
+            call mpi_barrier(mpi_comm_world, mpierr) ! Pretty sure this is unnecessary
 
             randnum = ran2(iseed2)
-write(*,*) "Core",myid,"randnum=",randnum
             ! Test if the move should be accepted or rejected based on del_chi
             if(del_chi <0.0)then
             !if(.true.)then !For timing purposes, always accept the move. TODO
                 ! Accept the move
                 call fem_accept_move(mpi_comm_world)
-                if(myid.eq.0) then
                 e1 = e2 ! eam
                 chi2_old = chi2_new
                 accepted = .true.
-                write(*,*) "MC move accepted outright."
-                endif
+                if(myid.eq.0) write(*,*) "MC move accepted outright."
             else
                 ! Based on the random number above, even if del_chi is negative, decide
                 ! whether to move or not (statistically).
                 if(log(1.-randnum)<-del_chi*beta)then
                     ! Accept move
                     call fem_accept_move(mpi_comm_world)
-                    if(myid.eq.0) then
                     e1 = e2 ! eam
                     chi2_old = chi2_new
                     accepted = .true.
-                    write(*,*) "MC move accepted due to probability. del_chi*beta = ", del_chi*beta
-                    endif
+                    if(myid.eq.0) write(*,*) "MC move accepted due to probability. del_chi*beta = ", del_chi*beta
                 else
                     ! Reject move
                     call reject_position(m, w, xx_cur, yy_cur, zz_cur)
                     call hutch_move_atom(m,w,xx_cur, yy_cur, zz_cur)  !update hutches.
                     call fem_reject_move(m, w, xx_cur, yy_cur, zz_cur, mpi_comm_world)
-                    if(myid.eq.0) then
                     e2 = e1 ! eam
                     accepted = .false.
-                    write(*,*) "MC move rejected."
-                    endif
+                    if(myid.eq.0) write(*,*) "MC move rejected."
                 endif
             endif
 
-if(myid.eq.0) then
             if(accepted) then
                 acceptance_array(mod(i,1000)+1) = 1
             else
@@ -420,6 +378,7 @@ if(myid.eq.0) then
             if(i .gt. 1000 .and. avg_acceptance .le. 0.05) write(0,*) "WARNING!  Acceptance rate is low:", avg_acceptance
 
             ! Periodically save data.
+            if(myid .eq. 0) then
             if(mod(i,1000)==0)then
                 ! Write to vk_update
                 !write(vku_fn, "(A9)") "vk_update"
@@ -466,7 +425,7 @@ if(myid.eq.0) then
                     write(40,*) i, avg_acceptance
                 close(40)
             endif
-endif ! myid == 0
+            endif ! myid == 0
 
             ! Every 50,000 steps lower the temp, max_move, and reset beta.
             if(mod(i,50000)==0)then
@@ -507,6 +466,7 @@ endif ! myid == 0
             close(57)
         endif
     endif ! Use RMC
+
 #ifdef USE_LMP
     if(myid.eq.0) then
     call lammps_close (lmp)

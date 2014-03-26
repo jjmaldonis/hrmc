@@ -2,9 +2,8 @@
 
 
 APP = ../rmc
-APP_FILE = rmc_v_1_0.f90
 
-SRC = ran2.f90 globals.f90 read_inputs_v2.f90 model_v2.f90 rmc_functions.f90 scattering_factors.f90 fft2dc.c slicelib.c islice.c fem1_v2.f90 gr.f90 eam.f90
+SRC = ran2.f90 globals.f90 read_inputs_v2.f90 model_v2.f90 rmc_functions.f90 scattering_factors.f90 fft2dc.c slicelib.c islice.c fem1_v2.f90 gr.f90 eam.f90 rmc_v_1_0.f90
 OBJ = $(addsuffix .o, $(basename $(SRC)))
 
 #USE_LMP = -DUSE_LMP #Uncomment if you want to use lammps
@@ -40,11 +39,8 @@ debug: FCFLAGS = -g -debug all -check all -implicitnone -warn all -openmp -fpp $
 debug: CCFLAGS = -debug all -g
 debug: ${APP}
 
-${APP}: ${APP_FILE}
-	${FC} ${LMP_OBJ} ${LMP_LIB} ${OBJ} ${APP_FILE:.f90=.o} ${FCFLAGS} -o ${APP}
-
-${APP_FILE}: ${OBJ}
-	${FC} -c ${APP_FILE} ${FCFLAGS} ${LMP_INC}
+${APP}: ${OBJ}
+	${FC} ${LMP_OBJ} ${LMP_LIB} ${OBJ} ${FCFLAGS} -o ${APP}
 
 clean:
 	rm -f *.mod *.o ${APP}
