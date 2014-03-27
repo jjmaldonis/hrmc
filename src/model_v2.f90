@@ -666,9 +666,6 @@ contains
         if(hx .lt. 1) write(*,*) "Warning: Hutch is out of range! Check x dimensions.", hx
         if(hy .lt. 1) write(*,*) "Warning: Hutch is out of range! Check y dimensions.", hy
         if(hz .lt. 1) write(*,*) "Warning: Hutch is out of range! Check z dimensions.", hz
-        !if(xx .ge. m%lx/2.0) hx = 1
-        !if(yy .ge. m%ly/2.0) hy = 1
-        !if(zz .ge. m%lz/2.0) hz = 1
     end subroutine hutch_position
 
 
@@ -1275,12 +1272,12 @@ contains
         call hutch_move_atom(m, atom, xx, yy, zz)
 
         !Error checking.
-        !if( m%xx%ind(atom) .ne. xx .or. m%yy%ind(atom) .ne. yy .or.  m%zz%ind(atom) .ne. zz) then
-        !    write(*,*) "WARNING: Atom",atom,"'s positions did not get updated correctly!"
-        !    write(*,*) m%xx%ind(atom), xx
-        !    write(*,*) m%yy%ind(atom), yy
-        !    write(*,*) m%zz%ind(atom), zz
-        !endif
+        if( m%xx%ind(atom) .ne. xx .or. m%yy%ind(atom) .ne. yy .or.  m%zz%ind(atom) .ne. zz) then
+            write(*,*) "WARNING: Atom",atom,"'s positions did not get updated correctly!"
+            write(*,*) m%xx%ind(atom), xx
+            write(*,*) m%yy%ind(atom), yy
+            write(*,*) m%zz%ind(atom), zz
+        endif
     end subroutine move_atom
 
 

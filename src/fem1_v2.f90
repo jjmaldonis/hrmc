@@ -639,9 +639,7 @@ contains
             end function islice
         end interface
 
-        call recalculate_hutches(m_int)
-
-        call cpu_time(timer1)
+        !call cpu_time(timer1)
 
         ! Regardless of whether or not we use autoslice, do the
         ! normal, fast intensity calculation for comparison.
@@ -870,8 +868,8 @@ contains
             deallocate(wobble)
         endif ! Use autoslice?
 
-        call cpu_time(timer2)
-        time_in_int = time_in_int + timer2-timer1
+        !call cpu_time(timer2)
+        !time_in_int = time_in_int + timer2-timer1
         !write (*,*) 'Total Elapsed CPU time in Intensity= ', time_in_int
         !write (*,*) 'Intensity call took', timer2 - timer1, 'seconds on processor', myid!, 'and core', thrnum
         !if(m_int%id .eq. 114) write(*,*) "Intensity for model:", m_int%id
@@ -1059,7 +1057,8 @@ contains
             ! unnecessarily a bit, but this should happen semi rarely and it
             ! shouldn't be THAT much slower. I should probably check. However,
             ! once if we change the reallocation to 10% instead of just a single
-            ! spot then it's much less big of a deal. TODO
+            ! spot then it's much less big of a deal. Something like this is
+            ! done.
 
             ! First check to see if:
             ! (rot_atom%natoms == 0) .and. (mrot(i)%rot_i(atom)%nat == 0).
@@ -1124,8 +1123,6 @@ contains
 
         enddo rotations
 
-!if(myid .eq. 0) call save_model(mrot(1)) ! TODO Delete this. For debugging.
-
         ! For debugging only.
         !ntpix = 0
         !do i=1, nrot
@@ -1139,8 +1136,13 @@ contains
         !write(*,*) "Average number of pixels to call intensity on per model:", real(ntpix)/211.0
         ! Update pixels if necessary.
 
+        ! In this loop, 'i' is the model that has intensity called on it.
         do i=myid+1, nrot, numprocs
             do m=1, pa%npix
+                ! TODO This should be better done for models larger than 1
+                ! pixel, because with the way it is written right now each core
+                ! may do a different number of pixel calculations, so one core
+                ! might do 5 and another core might do 0.
                 if(update_pix(i,m)) then
                     !write(*,*) "Calling intensity in MC on pixel (", pa%pix(j,1), ",",pa%pix(j,2), ") in rotated model ", i, "with core", myid
                     call intensity(mrot(i), res, pa%pix(m, 1), pa%pix(m, 2), k, &
@@ -1150,12 +1152,8 @@ contains
                 endif
             enddo
         enddo
-
         !write(*,*) "I am core", myid, "and I am past the int calls."
         
-        call mpi_barrier(comm, mpierr)
-        !write(*,*) "I am core", myid, "and I am past mp_barrier."
-
         ! Set psum_int and psum_int_sq. This MUST be done inside an MPI loop
         ! with the exact same structure as the MPI loop that called intensity.
         do i=myid+1, nrot, numprocs
@@ -1181,7 +1179,7 @@ contains
         call mpi_reduce (psum_int_sq, sum_int_sq, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
         if(use_autoslice) call mpi_reduce (psum_int_as, sum_int_as, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
         if(use_autoslice) call mpi_reduce (psum_int_as_sq, sum_int_as_sq, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
-        !write(*,*) "I am core", myid, "and I am past mp_reduce."
+        !write(*,*) "I am core", myid, "and I am past mpi_reduce."
 
         ! Recalculate the variance
         if(myid.eq.0)then

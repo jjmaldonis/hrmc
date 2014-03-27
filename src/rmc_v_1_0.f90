@@ -102,6 +102,14 @@ program rmc
     call mpi_comm_rank(mpi_comm_world, myid, mpierr)
     call mpi_comm_size(mpi_comm_world, numprocs, mpierr)
 
+    nthr = omp_get_max_threads()
+    if(myid.eq.0)then
+        write(*,*)
+        write(*,*) "Using", numprocs, "processors."
+        write(*,*) "OMP found a max number of threads of", nthr
+        write(*,*)
+    endif
+
 #ifdef USE_LMP
     if(myid.eq.0) then
         call lammps_open ('lmp -log log.simple -screen none', mpi_comm_world, lmp)
@@ -109,16 +117,7 @@ program rmc
     endif
 #endif
 
-    nthr = omp_get_max_threads()
-    if(myid.eq.0)then
-        write(*,*)
-        write(*,*) "This is the speedup dev version of rmc!"
-        write(*,*)
-        write(*,*) "Using", numprocs, "processors."
-        write(*,*) "OMP found a max number of threads of", nthr
-        write(*,*)
-    endif
-
+if(myid .eq. 0) then
     call get_command_argument(1, c, length, istat)
     if (istat == 0) then
         jobID = "_"//trim(c)
@@ -133,11 +132,6 @@ program rmc
     !end if
     !model_filename = trim(model_filename)
 
-    ! Set input filenames.
-    param_filename = 'param_file.in'
-    !call execute_command_line("cat param_file.in")
-
-if(myid .eq. 0) then
     ! Set output filenames.
     outbase = ""
     write(time_elapsed, "(A12)") "time_elapsed"
@@ -165,6 +159,10 @@ if(myid .eq. 0) then
 endif
 
     !------------------- Read inputs and initialize. -----------------!
+
+    ! Set input filenames.
+    param_filename = 'param_file.in'
+    !call execute_command_line("cat param_file.in")
     
     ! Start timer.
     t0 = omp_get_wtime()
@@ -225,7 +223,6 @@ endif
     ! Fem updates vk based on the intensity calculations and v_background.
     call fem(m, res, k, vk, vk_as, v_background, scatfact_e, mpi_comm_world, istat, square_pixel)
 
-    t1 = omp_get_wtime()
     if(myid.eq.0)then
         write(*,*) "Femsim took", t1-t0, "seconds on processor", myid
 
@@ -242,13 +239,6 @@ endif
     !------------------- Start RMC. -----------------!
 
     call mpi_barrier(mpi_comm_world, mpierr)
-    open(20, file=param_filename,iostat=istat, status='old')
-        read(20, '(a80)') comment !read comment from paramfile
-        read(20, '(a80)') comment !model filename
-        read(20, *) i !step to start at (start at 1 not 0)
-        read(20, *) temperature !starting temp when i = 1
-    close(20)
-    temperature = temperature * sqrt(0.7)**int(i/50000)
 
     if(use_rmc) then ! End here if we only want femsim. Set the variable above.
 
@@ -258,9 +248,10 @@ endif
             rmin_e, rmax_e, rmin_n, rmax_n, rmin_x, rmax_x, del_r_e, del_r_n, del_r_x, nk, chi2_gr, chi2_vk)
 
         chi2_old = chi2_no_energy + te1
+#ifndef USE_LMP
         e2 = e1 ! eam
+#endif
 
-        t0 = omp_get_wtime()
         if(myid.eq.0)then
             write(*,*)
             write(*,*) "Initialization complete. Starting Monte Carlo."
@@ -285,6 +276,7 @@ endif
         endif
 
 
+        t0 = omp_get_wtime()
         i=0
         ! RMC loop begins. The loop never stops.
         do while (i .ge. 0)
@@ -311,7 +303,6 @@ endif
                 m%zz%ind(w) = zz_cur
                 call random_move(m,w,xx_cur,yy_cur,zz_cur,xx_new,yy_new,zz_new, max_move)
             end do
-
             ! Update hutches, data for chi2, and chi2/del_chi
             call hutch_move_atom(m,w,xx_new, yy_new, zz_new)
     
@@ -346,10 +337,11 @@ endif
             randnum = ran2(iseed2)
             ! Test if the move should be accepted or rejected based on del_chi
             if(del_chi <0.0)then
-            !if(.true.)then !For timing purposes, always accept the move. TODO
                 ! Accept the move
                 call fem_accept_move(mpi_comm_world)
+#ifndef USE_LMP
                 e1 = e2 ! eam
+#endif
                 chi2_old = chi2_new
                 accepted = .true.
                 if(myid.eq.0) write(*,*) "MC move accepted outright."
@@ -359,7 +351,9 @@ endif
                 if(log(1.-randnum)<-del_chi*beta)then
                     ! Accept move
                     call fem_accept_move(mpi_comm_world)
+#ifndef USE_LMP
                     e1 = e2 ! eam
+#endif
                     chi2_old = chi2_new
                     accepted = .true.
                     if(myid.eq.0) write(*,*) "MC move accepted due to probability. del_chi*beta = ", del_chi*beta
@@ -368,7 +362,9 @@ endif
                     call reject_position(m, w, xx_cur, yy_cur, zz_cur)
                     call hutch_move_atom(m,w,xx_cur, yy_cur, zz_cur)  !update hutches.
                     call fem_reject_move(m, w, xx_cur, yy_cur, zz_cur, mpi_comm_world)
+#ifndef USE_LMP
                     e2 = e1 ! eam
+#endif
                     accepted = .false.
                     if(myid.eq.0) write(*,*) "MC move rejected."
                 endif
@@ -387,14 +383,14 @@ endif
             if(myid .eq. 0) then
             if(mod(i,1000)==0)then
                 ! Write to vk_update
-                !write(vku_fn, "(A9)") "vk_update"
-                !write(step_str,*) i
-                !vku_fn = trim(trim(trim(trim(vku_fn)//jobID)//"_")//step_str)//".txt"
-                !open(32,file=trim(vku_fn),form='formatted',status='unknown')
-                !    do j=1, nk
-                !        write(32,*)k(j),vk(j)
-                !    enddo
-                !close(32)
+                write(vku_fn, "(A9)") "vk_update"
+                write(step_str,*) i
+                vku_fn = trim(trim(trim(trim(vku_fn)//jobID)//"_")//step_str)//".txt"
+                open(32,file=trim(vku_fn),form='formatted',status='unknown')
+                    do j=1, nk
+                        write(32,*)k(j),vk(j)
+                    enddo
+                close(32)
                 ! Write to model_update
                 ! This takes a bit of time.
                 write(output_model_fn, "(A12)") "model_update"
