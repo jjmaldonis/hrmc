@@ -14,7 +14,7 @@ module fem_mod
     public :: fem_initialize, fem, I_average !femsim
     public:: fem_update, fem_accept_move, fem_reject_move !rmc
     public :: write_intensities
-    public :: write_time_in_int, print_sampled_map
+    public :: print_sampled_map
     !public :: print_image1, print_image2
     type pos_list
         integer :: nat
@@ -39,14 +39,7 @@ module fem_mod
     type(pos_list), save, dimension(:), pointer :: old_pos 
     type(pix_array), save, public :: pa
 
-    real, save :: time_in_int = 0.0
-
 contains
-
-    subroutine write_time_in_int(x)
-        integer, intent(in) :: x
-        write(*,*) "Elapsed CPU time in Intensity:", time_in_int
-    end subroutine write_time_in_int
 
     subroutine fem_initialize(m, res, k, nki, ntheta, nphi, npsi, scatfact_e, istat, square_pixel)
         type(model), intent(in) :: m 
@@ -419,11 +412,12 @@ contains
         enddo
     end subroutine i_average
 
-    subroutine rotation_for_checking(m)
+    subroutine rotation_for_checking(m,iprocs)
         implicit none
         type(model), intent(in) :: m
+        integer, intent(in) :: iprocs
         integer :: i, istat
-        do i=myid+1, nrot, numprocs
+        do i=myid+1, nrot, iprocs
             call rotate_model(rot(i, 1), rot(i, 2), rot(i, 3), m, mcopy(i), istat)
             call check_allocation(istat, 'Failed to rotate model')
             mcopy(i)%id = i
@@ -456,20 +450,18 @@ contains
         enddo
     end subroutine ompare_models
 
-    subroutine fem(m, res, k, vk, vk_as, v_background, scatfact_e, comm, istat, square_pixel, rot_begin, rot_end)
+    subroutine fem(m, res, k, psum_int, psum_int_sq, psum_int_as, psum_int_as_sq, scatfact_e, iprocs, comm, istat, square_pixel, rot_begin, rot_end)
         use mpi
         implicit none
         type(model), intent(in) :: m
         real, intent(in) :: res
         real, dimension(:), intent(in) :: k
-        real, dimension(:), INTENT(OUT) :: Vk, vk_as
-        real, dimension(:), intent(in) :: v_background
+        real, dimension(:), intent(out) ::  psum_int, psum_int_sq, psum_int_as, psum_int_as_sq
         real, dimension(:,:), pointer :: scatfact_e
+        integer, intent(in) :: iprocs
         integer, intent(out) :: istat
         logical, optional, intent(in) :: square_pixel
         integer, optional, intent(in) :: rot_begin, rot_end
-        real, dimension(:), allocatable :: psum_int, psum_int_sq, sum_int, sum_int_sq  !mpi
-        real, dimension(:), allocatable :: psum_int_as, psum_int_as_sq, sum_int_as, sum_int_as_sq  !mpi
         integer :: comm
         integer :: i, j
         integer begin_rot, end_rot
@@ -493,16 +485,10 @@ contains
             end_rot = nrot ! This is set in fem_initialize->init_rot
         endif
 
-        allocate (psum_int(size(k)), psum_int_sq(size(k)), sum_int(size(k)), sum_int_sq(size(k)), stat=istat)
-        allocate(psum_int_as(size(k)), psum_int_as_sq(size(k)), sum_int_as(size(k)), sum_int_as_sq(size(k)), stat=istat)
-        sum_int = 0.0
-        sum_int_sq = 0.0
         psum_int = 0.0
         psum_int_sq = 0.0
         psum_int_as = 0.0
         psum_int_as_sq = 0.0
-        sum_int_as = 0.0
-        sum_int_as_sq = 0.0
 
         ! initialize the rotated models
         ! Also allocate room for mcopy - Jason 20130731
@@ -511,7 +497,7 @@ contains
 
         ! Calculate all the rotated models and save them in mrot.
         ! This is actually really fast.
-        do i=myid+1, nrot, numprocs
+        do i=myid+1, nrot, iprocs
             call rotate_model(rot(i, 1), rot(i, 2), rot(i, 3), m, mrot(i), istat)
             call check_allocation(istat, 'Failed to rotate model')
             mrot(i)%id = i
@@ -521,7 +507,7 @@ contains
         call check_allocation(istat, 'Cannot allocate memory for old indices and positions in fem_initialize.')
         ! Initialize old_index and old_pos arrays. The if statements should
         ! be unnecessary, but they don't hurt. Better safe than sorry.
-        do i=myid+1, nrot, numprocs
+        do i=myid+1, nrot, iprocs
             old_index(i)%nat = 0
             if( allocated(old_index(i)%ind) ) deallocate(old_index(i)%ind)
             old_pos(i)%nat = 0
@@ -533,7 +519,7 @@ contains
         if(myid .eq. 0) then
             write(*,*); write(*,*) "Calculating intensities over the models: nrot = ", nrot; write(*,*)
         endif
-        do i=myid+1, nrot, numprocs
+        do i=myid+1, nrot, iprocs
             do j=1, pa%npix
                 !write(*,*) "Calling intensity on pixel (", pa%pix(j,1), ",",pa%pix(j,2), ") in rotated model ", i, "with core", myid
                 call intensity(mrot(i), res, pa%pix(j, 1), pa%pix(j, 2), k, int_i(1:nk, j, i), int_i_as(1:nk, j, i), scatfact_e, istat, pixel_square, use_autoslice)
@@ -547,32 +533,22 @@ contains
             !write(*,*) "Finished intensity calls on model", i
         enddo
 
-        call mpi_barrier(comm, mpierr)
-        call mpi_reduce (psum_int, sum_int, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
-        call mpi_reduce (psum_int_sq, sum_int_sq, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
-        if(use_autoslice) call mpi_reduce (psum_int_as, sum_int_as, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
-        if(use_autoslice) call mpi_reduce (psum_int_as_sq, sum_int_as_sq, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
-
-        if(myid.eq.0)then
-            do i=1, nk
-                Vk(i) = (sum_int_sq(i)/(pa%npix*nrot))/((sum_int(i)/(pa%npix*nrot))**2)-1.0
-                Vk(i) = Vk(i) - v_background(i)  ! background subtraction   052210 JWH
-            end do
-        endif
-        if(use_autoslice) then
-            do i=1, nk
-                Vk_as(i) = (sum_int_as(i)**2/(pa%npix*nrot))/((sum_int_as(i)**2/(pa%npix*nrot))**2)-1.0
-                Vk_as(i) = Vk_as(i) - v_background(i)   !background subtraction 052210 JWH
-                if(use_autoslice) then
-                    Vk_as(i) = (sum_int_as(i)**2/(pa%npix*nrot))/((sum_int_as(i)**2/(pa%npix*nrot))**2)-1.0
-                    Vk_as(i) = Vk_as(i) - v_background(i)   !background subtraction 052210 JWH
-                endif
-            enddo
-        endif
-
-        deallocate(psum_int, psum_int_sq, sum_int, sum_int_sq)
-
-        time_in_int = 0.0 ! Reset for RMC.
+        !if(myid.eq.0)then
+        !    do i=1, nk
+        !        Vk(i) = (sum_int_sq(i)/(pa%npix*nrot))/((sum_int(i)/(pa%npix*nrot))**2)-1.0
+        !        Vk(i) = Vk(i) - v_background(i)  ! background subtraction   052210 JWH
+        !    end do
+        !endif
+        !if(use_autoslice) then
+        !    do i=1, nk
+        !        Vk_as(i) = (sum_int_as(i)**2/(pa%npix*nrot))/((sum_int_as(i)**2/(pa%npix*nrot))**2)-1.0
+        !        Vk_as(i) = Vk_as(i) - v_background(i)   !background subtraction 052210 JWH
+        !        if(use_autoslice) then
+        !            Vk_as(i) = (sum_int_as(i)**2/(pa%npix*nrot))/((sum_int_as(i)**2/(pa%npix*nrot))**2)-1.0
+        !            Vk_as(i) = Vk_as(i) - v_background(i)   !background subtraction 052210 JWH
+        !        endif
+        !    enddo
+        !endif
     end subroutine fem
 
     subroutine intensity(m_int, res, px, py, k, int_i, int_i_as, scatfact_e, istat, square_pixel, use_autoslice)
@@ -869,8 +845,6 @@ contains
         endif ! Use autoslice?
 
         !call cpu_time(timer2)
-        !time_in_int = time_in_int + timer2-timer1
-        !write (*,*) 'Total Elapsed CPU time in Intensity= ', time_in_int
         !write (*,*) 'Intensity call took', timer2 - timer1, 'seconds on processor', myid!, 'and core', thrnum
         !if(m_int%id .eq. 114) write(*,*) "Intensity for model:", m_int%id
         !if(m_int%id .eq. 114) write(*,*) int_i
@@ -964,19 +938,18 @@ contains
     end subroutine move_atom_in_rotated_model
 
 
-    subroutine fem_update(m_in, atom, res, k, vk, vk_as, v_background, scatfact_e, comm, istat, square_pixel, use_autoslice)
+    subroutine fem_update(m_in, atom, res, k, psum_int, psum_int_sq, psum_int_as, psum_int_as_sq, scatfact_e, iprocs, comm, istat, square_pixel, use_autoslice)
         use mpi
         type(model), intent(in) :: m_in
         integer, intent(in) :: atom
         real, intent(in) :: res
-        real, dimension(:), intent(in) :: k, v_background
-        real, dimension(:), intent(out) :: vk, vk_as
+        real, dimension(:), intent(in) :: k
+        real, dimension(:), intent(out) ::  psum_int, psum_int_sq, psum_int_as, psum_int_as_sq
         real, dimension(:,:), pointer :: scatfact_e
+        integer, intent(in) :: iprocs
         integer, intent(out) :: istat
         logical, intent(in) :: square_pixel
         logical, intent(in) :: use_autoslice
-        real, dimension(:), allocatable :: psum_int, psum_int_sq, sum_int, sum_int_sq !mpi
-        real, dimension(:), allocatable :: psum_int_as, psum_int_as_sq, sum_int_as, sum_int_as_sq !mpi autoslice
         integer :: comm
         type(model) :: moved_atom, rot_atom
         integer :: i, j, m, n, ntpix
@@ -1010,24 +983,15 @@ contains
         moved_atom%composition(1) = 1.0
         moved_atom%rotated = .FALSE.
 
-        ! Initialize the intensity arrays.
-        allocate(psum_int(size(k)), psum_int_sq(size(k)), sum_int(size(k)), &
-        sum_int_sq(size(k)), stat=istat)
-
-        allocate(psum_int_as(size(k)), psum_int_as_sq(size(k)), sum_int_as(size(k)), &
-        sum_int_as_sq(size(k)), stat=istat)
-
         old_int=0.0; old_int_sq=0.0
-        sum_int = 0.0; sum_int_sq = 0.0
         psum_int = 0.0; psum_int_sq = 0.0
-        sum_int_as = 0.0!; sum_in_as_sq = 0.0
         psum_int_as = 0.0; psum_int_as_sq = 0.0
 
         ! ------- Rotate models and call intensity on necessary pixels. ------- !
         !write(*,*) "Rotating, etc ", nrot, " single atom models in fem_update."
         
-        !write(*,*) "We have", numprocs, "processor(s)."
-        rotations: do i=myid+1, nrot, numprocs
+        !write(*,*) "We have", iprocs, "processor(s)."
+        rotations: do i=myid+1, nrot, iprocs
 
             ! Store the current (soon to be old) intensities for fem_reject_move
             ! so we don't lose them upon recalculation.
@@ -1137,7 +1101,7 @@ contains
         ! Update pixels if necessary.
 
         ! In this loop, 'i' is the model that has intensity called on it.
-        do i=myid+1, nrot, numprocs
+        do i=myid+1, nrot, iprocs
             do m=1, pa%npix
                 ! TODO This should be better done for models larger than 1
                 ! pixel, because with the way it is written right now each core
@@ -1156,7 +1120,7 @@ contains
         
         ! Set psum_int and psum_int_sq. This MUST be done inside an MPI loop
         ! with the exact same structure as the MPI loop that called intensity.
-        do i=myid+1, nrot, numprocs
+        do i=myid+1, nrot, iprocs
             do m=1, pa%npix
                 psum_int(1:nk) = psum_int(1:nk) + int_i(1:nk, m, i)
                 psum_int_sq(1:nk) = psum_int_sq(1:nk) + int_sq(1:nk, m, i)
@@ -1174,48 +1138,48 @@ contains
         ! root_processor_id. I think this is how it works anyways. I am probably
         ! somewhat off.
 
-        call mpi_barrier(comm, mpierr)
-        call mpi_reduce (psum_int, sum_int, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
-        call mpi_reduce (psum_int_sq, sum_int_sq, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
-        if(use_autoslice) call mpi_reduce (psum_int_as, sum_int_as, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
-        if(use_autoslice) call mpi_reduce (psum_int_as_sq, sum_int_as_sq, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
+        !call mpi_reduce (psum_int, sum_int, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
+        !call mpi_reduce (psum_int_sq, sum_int_sq, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
+        !if(use_autoslice) call mpi_reduce (psum_int_as, sum_int_as, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
+        !if(use_autoslice) call mpi_reduce (psum_int_as_sq, sum_int_as_sq, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
         !write(*,*) "I am core", myid, "and I am past mpi_reduce."
 
         ! Recalculate the variance
-        if(myid.eq.0)then
-            do i=1, nk
-                Vk(i) = (sum_int_sq(i)/(pa%npix*nrot))/((sum_int(i)/(pa%npix*nrot))**2)-1.0
-                Vk(i) = Vk(i) - v_background(i)   !background subtraction 052210 JWH
-                ! TODO MAKE SURE THIS IS RIGHT.
-                if(use_autoslice) then
-                    Vk_as(i) = (sum_int_as(i)**2/(pa%npix*nrot))/((sum_int_as(i)**2/(pa%npix*nrot))**2)-1.0
-                    Vk_as(i) = Vk_as(i) - v_background(i)   !background subtraction 052210 JWH
-                endif
-            end do
-        endif
+        !if(myid.eq.0)then
+        !    do i=1, nk
+        !        Vk(i) = (sum_int_sq(i)/(pa%npix*nrot))/((sum_int(i)/(pa%npix*nrot))**2)-1.0
+        !        Vk(i) = Vk(i) - v_background(i)   !background subtraction 052210 JWH
+        !        ! TODO MAKE SURE THIS IS RIGHT.
+        !        if(use_autoslice) then
+        !            Vk_as(i) = (sum_int_as_sq(i)/(pa%npix*nrot))/((sum_int_as(i)/(pa%npix*nrot))**2)-1.0
+        !            Vk_as(i) = Vk_as(i) - v_background(i)   !background subtraction 052210 JWH
+        !        endif
+        !    end do
+        !endif
 
         deallocate(moved_atom%xx%ind, moved_atom%yy%ind, moved_atom%zz%ind, moved_atom%znum%ind, moved_atom%atom_type, moved_atom%znum_r%ind, moved_atom%composition, stat=istat)
         !call destroy_model(moved_atom) ! Memory leak?
-        deallocate(psum_int, psum_int_sq, sum_int, sum_int_sq)
         !write(*,*) "I am core", myid, "and I am done with fem_update."
     end subroutine fem_update
 
-    subroutine fem_accept_move(comm)
+    subroutine fem_accept_move(iprocs, comm)
     ! Accept the move.  The atom positions are already changed in the rotated
     ! models, so we only need to clear old_index and old_pos arrays for reuse.
         use mpi
         integer :: comm, j
-        !do j=myid+1, nrot, numprocs ! Added by Jason 20130731
+        integer, intent(in) :: iprocs
+        !do j=myid+1, nrot, iprocs ! Added by Jason 20130731
         !    call destroy_model(mcopy(j))
         !    call copy_model(mrot(j), mcopy(j))
         !enddo
-        call fem_reset_old(comm)
+        call fem_reset_old(iprocs, comm)
     end subroutine fem_accept_move
 
-    subroutine fem_reset_old(comm)
+    subroutine fem_reset_old(iprocs, comm)
         use mpi
         integer :: i, comm
-        do i=myid+1, nrot, numprocs
+        integer, intent(in) :: iprocs
+        do i=myid+1, nrot, iprocs
             old_index(i)%nat = 0
             if(allocated(old_index(i)%ind)) deallocate(old_index(i)%ind)
             old_pos(i)%nat = 0
@@ -1223,13 +1187,14 @@ contains
         enddo
     end subroutine fem_reset_old
 
-    subroutine fem_reject_move(m, atom, xx_cur, yy_cur, zz_cur, comm) !, iii)
+    subroutine fem_reject_move(m, atom, xx_cur, yy_cur, zz_cur, iprocs, comm) !, iii)
     ! Reject the move. If the atom was simply moved, unmove it using old_pos and old_index.
     ! If the atom appeared or disappeared we will use mcopy to replace mrot for each rotation.
         use mpi
         type(model), intent(in) :: m ! Just in because we undo the move elsewhere
         integer, intent(in) :: atom
         real, intent(in) :: xx_cur, yy_cur, zz_cur
+        integer, intent(in) :: iprocs
         integer :: i, j, istat
         integer :: comm
         type(model) :: moved_atom, rot_atom
@@ -1257,7 +1222,7 @@ contains
         moved_atom%rotated = .FALSE.
 
 !write(*,*) "Un-moving atom in rotated models"
-        do i=myid+1, nrot, numprocs
+        do i=myid+1, nrot, iprocs
             !write(*,*) "Model", i, "has old_index%nat=", old_index(i)%nat
             if(.not. old_index(i)%nat == 0) then
                 ! If the move changed the number of atoms in the model, the model
@@ -1288,18 +1253,19 @@ contains
                 enddo
             endif
         enddo
-        call fem_reset_old(comm)
+        call fem_reset_old(iprocs, comm)
         !if( iii > 30000) call checkers(m)
     end subroutine fem_reject_move
 
-    subroutine checkers(m)
+    subroutine checkers(m, iprocs)
         ! Stupd name but i needed one
         ! Runs compare_models to make sure they are the same
         type(model), intent(in) :: m
+        integer, intent(in) :: iprocs
         integer :: i
         !write(*,*) "Rotating..."
-        call rotation_for_checking(m)
-        do i=myid+1, nrot, numprocs
+        call rotation_for_checking(m, iprocs)
+        do i=myid+1, nrot, iprocs
             !write(*,*) "Comparing models...", i
             call ompare_models(mrot(i),mcopy(i))
         enddo

@@ -65,6 +65,9 @@ program rmc
     real, pointer, dimension(:) :: gr_n,r_n
     real, pointer, dimension(:) :: gr_x,r_x
     real, pointer, dimension(:) :: vk, vk_exp, k, vk_exp_err, v_background, vk_as !vk_as is for autoslice/multislice (whatever it's called)
+    real, pointer, dimension(:) :: psum_int, psum_int_sq, psum_int_as, psum_int_as_sq
+    real, dimension(:), allocatable :: sum_int, sum_int_sq !mpi
+    real, dimension(:), allocatable :: sum_int_as, sum_int_as_sq !mpi autoslice
     real, pointer, dimension(:,:) :: cutoff_r 
     real, pointer, dimension(:,:) :: scatfact_e
     real :: xx_cur, yy_cur, zz_cur, xx_new, yy_new, zz_new
@@ -85,12 +88,13 @@ program rmc
 #ifndef USE_LMP
     real :: te1, te2 ! For eam, not lammps version of energy
 #endif
-    logical :: square_pixel, accepted, use_rmc, use_multislice
+    logical :: square_pixel, accepted, use_rmc, use_multislice, use_autoslice
     integer :: ipvd, nthr
     doubleprecision :: t0, t1, t2 !timers
     real :: x! This is the parameter we will use to fit vsim to vas.
     integer, dimension(1000) :: acceptance_array
     real :: avg_acceptance = 1.0
+    integer :: Mcore, Ecore, Icores ! For splitting the cores up, main core, energy core, intensity cores
 
     !------------------- Program setup. -----------------!
 
@@ -110,14 +114,32 @@ program rmc
         write(*,*)
     endif
 
-#ifdef USE_LMP
-    if(myid.eq.0) then
-        call lammps_open ('lmp -log log.simple -screen none', mpi_comm_world, lmp)
-        call lammps_file (lmp, 'lmp_energy.in')
+    ! Note then that Icores+1 = # of cores we are using for the intensity calls
+    ! This is important for calling the intensity on the correct threads
+    if(numprocs .ge. 3) then
+        Mcore = numprocs - 1
+        Ecore = numprocs - 2
+        Icores = numprocs -3 ! starts at 0, ends at N-3 (inclusive)
+    else
+    ! Need to do some corrections sometimes if using 1 or 2 cores
+        Mcore = numprocs - 1
+        Ecore = numprocs - 1
+        Icores = numprocs - 1
     endif
+    if(myid .eq. Mcore) then
+    write(*,*) "Mcore=", Mcore
+    write(*,*) "Ecore=", Ecore
+    write(*,*) "Icore=", Icores
+    endif
+
+#ifdef USE_LMP
+if(myid .eq. Ecore) then
+    call lammps_open ('lmp -log log.simple -screen none', mpi_comm_world, lmp)
+    call lammps_file (lmp, 'lmp_energy.in')
+endif
 #endif
 
-if(myid .eq. 0) then
+if(myid .eq. Mcore) then
     call get_command_argument(1, c, length, istat)
     if (istat == 0) then
         jobID = "_"//trim(c)
@@ -165,7 +187,7 @@ endif
     !call execute_command_line("cat param_file.in")
     
     ! Start timer.
-    t0 = omp_get_wtime()
+    t0 = MPI_wtime()
 
     ! Read input model
     call read_model(param_filename, model_filename, comment, m, istat)
@@ -180,7 +202,7 @@ endif
         scale_fac_initial, Q, fem_algorithm, pixel_distance, total_steps, &
         rmin_e, rmax_e, rmin_n, rmax_n, rmin_x, rmax_x, status2)
 
-    if(myid .eq. 0) then
+    if(myid .eq. Mcore) then
     write(*,*) "Model filename: ", trim(model_filename)
     write(*,*)
     endif
@@ -194,7 +216,9 @@ endif
     square_pixel = .TRUE. ! RMC uses square pixels, not round.
     use_rmc = .TRUE.
     use_multislice = .FALSE.
+    use_autoslice = .FALSE.
 
+if(myid .eq. Ecore) then
 #ifdef USE_LMP
     call lammps_command (lmp, 'run 0')
     call lammps_extract_compute (te1, lmp, 'pot', 0, 0)
@@ -202,14 +226,17 @@ endif
     call read_eam(m)
     call eam_initial(m,te1)
 #endif
-    if(myid .eq. 0) write(*,*) "Energy = ", te1
+endif
+    call mpi_bcast(te1,1,mpi_real,Ecore,mpi_comm_world,mpierr)
+    if(myid .eq. Mcore) write(*,*) "Energy = ", te1
 
+    ! Need to do this on all cores so I can later reduce Intensities
     call fem_initialize(m, res, k, nk, ntheta, nphi, npsi, scatfact_e, istat,  square_pixel)
     allocate(vk(size(vk_exp)), vk_as(size(vk_exp)))
     vk = 0.0; vk_as = 0.0
 
     ! Print warning message if we are using too many cores.
-    if(myid.eq.0) then
+    if(myid.eq.Mcore) then
         call print_sampled_map(m, res, square_pixel)
         if(pa%npix /= 1) then
             if(numprocs > 3*nrot) write(*,*) "WARNING: You are using too many cores!"
@@ -220,39 +247,61 @@ endif
 
     !------------------- Call femsim. -----------------!
 
+    allocate(sum_int(nk), sum_int_sq(nk), stat=istat)
+    allocate(sum_int_as(nk), sum_int_as_sq(nk), stat=istat)
+    allocate(psum_int(nk), psum_int_sq(nk), stat=istat)
+    allocate(psum_int_as(nk), psum_int_as_sq(nk), stat=istat)
+if(myid .le. Icores) then
     ! Fem updates vk based on the intensity calculations and v_background.
-    call fem(m, res, k, vk, vk_as, v_background, scatfact_e, mpi_comm_world, istat, square_pixel)
+    call fem(m, res, k, psum_int, psum_int_sq, psum_int_as, psum_int_as_sq, scatfact_e, Icores+1, mpi_comm_world, istat, square_pixel)
+endif
+call mpi_reduce(psum_int, sum_int, nk, mpi_real, mpi_sum, Mcore, mpi_comm_world, mpierr)
+call mpi_reduce(psum_int_sq, sum_int_sq, nk, mpi_real, mpi_sum, Mcore, mpi_comm_world, mpierr)
+if(use_autoslice) call mpi_reduce (psum_int_as, sum_int_as, nk, mpi_real, mpi_sum, Mcore, mpi_comm_world, mpierr)
+if(use_autoslice) call mpi_reduce (psum_int_as_sq, sum_int_as_sq, nk, mpi_real, mpi_sum, Mcore, mpi_comm_world, mpierr)
+! Recalculate V(k)
+if(myid.eq.Mcore)then
+    do j=1, nk
+        Vk(j) = (sum_int_sq(j)/(pa%npix*nrot))/((sum_int(j)/(pa%npix*nrot))**2)-1.0
+        Vk(j) = Vk(j) - v_background(j)   !background subtraction 052210 JWH
+        if(use_autoslice) then
+            Vk_as(j) = (sum_int_as_sq(j)/(pa%npix*nrot))/((sum_int_as(j)/(pa%npix*nrot))**2)-1.0
+            Vk_as(j) = Vk_as(j) - v_background(j)   !background subtraction 052210 JWH
+        endif
+    end do
+endif
 
-    if(myid.eq.0)then
+    t1 = MPI_wtime()
+    if(myid.eq.Mcore)then
         write(*,*) "Femsim took", t1-t0, "seconds on processor", myid
-
         ! Write initial vk 
         open(unit=52,file=trim(vki_fn),form='formatted',status='unknown')
-!            write(*,*) "Writing V(k)."
-            do i=1, nk
-!                write (*,*) k(i),vk(i)
-                write(52,*) k(i),vk(i)
+            do j=1, nk
+                write(52,*) k(j),vk(j)
             enddo
         close(52)
     endif
 
     !------------------- Start RMC. -----------------!
 
-    call mpi_barrier(mpi_comm_world, mpierr)
-
     if(use_rmc) then ! End here if we only want femsim. Set the variable above.
+        i=0
 
+if(myid .eq. Mcore) then
         ! Calculate initial chi2
         chi2_no_energy = chi_square(used_data_sets,weights,gr_e, gr_e_err, gr_n, gr_x, vk_exp, vk_exp_err, &
             gr_e_sim_cur, gr_n_sim_cur, gr_x_sim_cur, vk, scale_fac,&
             rmin_e, rmax_e, rmin_n, rmax_n, rmin_x, rmax_x, del_r_e, del_r_n, del_r_x, nk, chi2_gr, chi2_vk)
-
         chi2_old = chi2_no_energy + te1
+endif
 #ifndef USE_LMP
+if(myid.eq.Ecore) then
         e2 = e1 ! eam
+endif
 #endif
 
-        if(myid.eq.0)then
+        t1 = MPI_wtime()
+        if(myid.eq.Mcore)then
             write(*,*)
             write(*,*) "Initialization complete. Starting Monte Carlo."
             write(*,*) "Initial Conditions:"
@@ -262,7 +311,6 @@ endif
             write(*,*)
             ! Reset time_elapsed, energy_function, chi_squared_file
             open(35,file=trim(time_elapsed),form='formatted',status='unknown')
-                t1 = omp_get_wtime()
                 write(35,*) numprocs, "processors are being used."
                 write(35,*) "Step, Time elapsed, Avg time per step, This step's time"
             close(35)
@@ -276,23 +324,23 @@ endif
         endif
 
 
-        t0 = omp_get_wtime()
-        i=0
+        t0 = MPI_wtime()
         ! RMC loop begins. The loop never stops.
         do while (i .ge. 0)
             i=i+1
-            t2 = omp_get_wtime()
+            t2 = MPI_wtime()
 
-            if(myid .eq. 0) write(*,*) "Starting step", i
+            if(myid .eq. Mcore) write(*,*) "Starting step", i
 
 #ifdef TIMING
             if( i > 100) then
-                if(myid .eq. 0) write(*,*) "STOPPING MC AFTER 100 STEPS"
+                if(myid .eq. Mcore) write(*,*) "STOPPING MC AFTER 100 STEPS"
                 call mpi_finalize(mpierr)
                 stop ! Stop after 100 steps for timing runs.
             endif
 #endif
 
+if(myid .eq. Mcore) then
             call random_move(m,w,xx_cur,yy_cur,zz_cur,xx_new,yy_new,zz_new, max_move)
             ! check_curoffs returns false if the new atom placement is too close to
             ! another atom. Returns true if the move is okay. (hard shere cutoff)
@@ -303,9 +351,24 @@ endif
                 m%zz%ind(w) = zz_cur
                 call random_move(m,w,xx_cur,yy_cur,zz_cur,xx_new,yy_new,zz_new, max_move)
             end do
-            ! Update hutches, data for chi2, and chi2/del_chi
+            write(*,*) "I am Mcore, ie", myid, "and I moved atom", w, "to", xx_new,yy_new,zz_new, "from", xx_cur,yy_cur,zz_cur
+endif
+call mpi_bcast(w,1,mpi_integer,Mcore,mpi_comm_world,mpierr)
+write(*,*) "CORE", myid, "ATOM=", w
+call mpi_bcast(xx_cur,1,mpi_real,Mcore,mpi_comm_world,mpierr)
+call mpi_bcast(yy_cur,1,mpi_real,Mcore,mpi_comm_world,mpierr)
+call mpi_bcast(zz_cur,1,mpi_real,Mcore,mpi_comm_world,mpierr)
+call mpi_bcast(xx_new,1,mpi_real,Mcore,mpi_comm_world,mpierr)
+call mpi_bcast(yy_new,1,mpi_real,Mcore,mpi_comm_world,mpierr)
+call mpi_bcast(zz_new,1,mpi_real,Mcore,mpi_comm_world,mpierr)
+m%xx%ind(w) = xx_new
+m%yy%ind(w) = yy_new
+m%zz%ind(w) = zz_new
+write(*,*) "I am core", myid, "and I moved atom", w, "to", xx_new,yy_new,zz_new, "from", xx_cur,yy_cur,zz_cur
+            ! Update hutches
             call hutch_move_atom(m,w,xx_new, yy_new, zz_new)
     
+if(myid .eq. Ecore) then
 #ifdef USE_LMP
             write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", w, " x ", xx_new, " y ", yy_new, " z ", zz_new
             call lammps_command(lmp, trim(lmp_cmd_str))
@@ -314,62 +377,87 @@ endif
 #else
             call eam_mc(m, w, xx_cur, yy_cur, zz_cur, xx_new, yy_new, zz_new, te2)
 #endif
-            if(myid .eq. 0) write(*,*) "Energy = ", te2
+endif
+            call mpi_bcast(te2,1,mpi_real,Ecore,mpi_comm_world,mpierr)
+            if(myid .eq. Mcore) write(*,*) "Energy = ", te2
 
+if(myid .le. Icores) then
             ! Use multislice every 10k steps if specified.
             if(use_multislice .and. mod(i,10000) .eq. 0) then
-                call fem_update(m, w, res, k, vk, vk_as, v_background, scatfact_e, mpi_comm_world, istat, square_pixel, .true.)
-                call update_scale_factor(scale_fac, scale_fac_initial, vk, vk_as)
+                use_autoslice = .TRUE.
+                call fem_update(m, w, res, k, psum_int, psum_int_sq, psum_int_as, psum_int_as_sq, scatfact_e, Icores+1, mpi_comm_world, istat, square_pixel, use_autoslice)
+                !call update_scale_factor(scale_fac, scale_fac_initial, vk, vk_as)
             else
-                call fem_update(m, w, res, k, vk, vk_as, v_background, scatfact_e, mpi_comm_world, istat, square_pixel, .false.)
-                !write(*,*) "I am core", myid, "and I have exited from fem_update into the main rmc block."
+                use_autoslice = .FALSE.
+                call fem_update(m, w, res, k, psum_int, psum_int_sq, psum_int_as, psum_int_as_sq, scatfact_e, Icores+1, mpi_comm_world, istat, square_pixel, use_autoslice)
             endif
+endif
+            !write(*,*) "I am core", myid, "and I have exited from fem_update into the main rmc block."
+call mpi_reduce(psum_int, sum_int, nk, mpi_real, mpi_sum, Mcore, mpi_comm_world, mpierr)
+call mpi_reduce(psum_int_sq, sum_int_sq, nk, mpi_real, mpi_sum, Mcore, mpi_comm_world, mpierr)
+if(use_autoslice) call mpi_reduce (psum_int_as, sum_int_as, nk, mpi_real, mpi_sum, Mcore, mpi_comm_world, mpierr)
+if(use_autoslice) call mpi_reduce (psum_int_as_sq, sum_int_as_sq, nk, mpi_real, mpi_sum, Mcore, mpi_comm_world, mpierr)
+! Recalculate V(k)
+if(myid.eq.Mcore)then
+            do j=1, nk
+                Vk(j) = (sum_int_sq(j)/(pa%npix*nrot))/((sum_int(j)/(pa%npix*nrot))**2)-1.0
+                Vk(j) = Vk(i) - v_background(j)   !background subtraction 052210 JWH
+                if(use_autoslice) then
+                    Vk_as(j) = (sum_int_as_sq(j)/(pa%npix*nrot))/((sum_int_as(j)/(pa%npix*nrot))**2)-1.0
+                    Vk_as(j) = Vk_as(j) - v_background(j)   !background subtraction 052210 JWH
+                endif
+            end do
 
             chi2_no_energy = chi_square(used_data_sets,weights,gr_e, gr_e_err, &
                 gr_n, gr_x, vk_exp, vk_exp_err, gr_e_sim_new, gr_n_sim_new, &
                 gr_x_sim_new, vk, scale_fac, rmin_e, rmax_e, rmin_n, rmax_n, &
                 rmin_x, rmax_x, del_r_e, del_r_n, del_r_x, nk, chi2_gr, chi2_vk)
-
             chi2_new = chi2_no_energy + te2
             del_chi = chi2_new - chi2_old
-            call mpi_barrier(mpi_comm_world, mpierr) ! Pretty sure this is unnecessary
 
             randnum = ran2(iseed2)
             ! Test if the move should be accepted or rejected based on del_chi
             if(del_chi <0.0)then
                 ! Accept the move
-                call fem_accept_move(mpi_comm_world)
-#ifndef USE_LMP
-                e1 = e2 ! eam
-#endif
-                chi2_old = chi2_new
                 accepted = .true.
-                if(myid.eq.0) write(*,*) "MC move accepted outright."
+                !write(*,*) "MC move accepted outright."
             else
                 ! Based on the random number above, even if del_chi is negative, decide
                 ! whether to move or not (statistically).
                 if(log(1.-randnum)<-del_chi*beta)then
                     ! Accept move
-                    call fem_accept_move(mpi_comm_world)
-#ifndef USE_LMP
-                    e1 = e2 ! eam
-#endif
-                    chi2_old = chi2_new
                     accepted = .true.
-                    if(myid.eq.0) write(*,*) "MC move accepted due to probability. del_chi*beta = ", del_chi*beta
+                    !write(*,*) "MC move accepted due to probability. del_chi*beta = ", del_chi*beta
                 else
                     ! Reject move
-                    call reject_position(m, w, xx_cur, yy_cur, zz_cur)
-                    call hutch_move_atom(m,w,xx_cur, yy_cur, zz_cur)  !update hutches.
-                    call fem_reject_move(m, w, xx_cur, yy_cur, zz_cur, mpi_comm_world)
-#ifndef USE_LMP
-                    e2 = e1 ! eam
-#endif
                     accepted = .false.
-                    if(myid.eq.0) write(*,*) "MC move rejected."
+                    !write(*,*) "MC move rejected."
+            endif
+endif
+call mpi_bcast(accepted,1,mpi_logical,Mcore,mpi_comm_world,mpierr)
+
+            if(accepted) then ! Accepted
+if(myid .le. Icores) then
+                call fem_accept_move(Icores+1, mpi_comm_world)
+endif
+#ifndef USE_LMP
+                if(myid .eq. Ecore) e1 = e2 ! eam
+#endif
+                chi2_old = chi2_new
+            else ! Rejected
+                call reject_position(m, w, xx_cur, yy_cur, zz_cur)
+                call hutch_move_atom(m,w,xx_cur, yy_cur, zz_cur)  !update hutches.
+if(myid .le. Icores) then
+                call fem_reject_move(m, w, xx_cur, yy_cur, zz_cur, Icores+1, mpi_comm_world)
+endif
+#ifndef USE_LMP
+                if(myid .eq. Ecore) e2 = e1 ! eam
+#endif
                 endif
             endif
 
+            t1 = MPI_wtime()
+if(myid .eq. Mcore) then
             if(accepted) then
                 acceptance_array(mod(i,1000)+1) = 1
             else
@@ -380,7 +468,6 @@ endif
             if(i .gt. 1000 .and. avg_acceptance .le. 0.05) write(0,*) "WARNING!  Acceptance rate is low:", avg_acceptance
 
             ! Periodically save data.
-            if(myid .eq. 0) then
             if(mod(i,1000)==0)then
                 ! Write to vk_update
                 write(vku_fn, "(A9)") "vk_update"
@@ -416,7 +503,6 @@ endif
             if(mod(i,1)==0)then
                 ! Write to time_elapsed
                 open(35,file=trim(time_elapsed),form='formatted',status='unknown',access='append')
-                    t1 = omp_get_wtime()
                     write (35,*) i, t1-t0, (t1-t0)/i, t1-t2
                 close(35)
             endif
@@ -426,7 +512,7 @@ endif
                     write(40,*) i, avg_acceptance
                 close(40)
             endif
-            endif ! myid == 0
+endif ! myid == Mcore
 
             ! Every 50,000 steps lower the temp, max_move, and reset beta.
             if(mod(i,50000)==0)then
@@ -440,7 +526,8 @@ endif
         write(*,*) "Monte Carlo Finished!"
 
         ! The rmc loop finished. Write final data.
-        if(myid.eq.0)then
+        t1 = MPI_wtime()
+        if(myid.eq.Mcore)then
             ! Write final vk
             open(unit=54,file=trim(vkf_fn),form='formatted',status='unknown')
             do i=1, nk
@@ -461,7 +548,6 @@ endif
             close(56)
             ! Write final time spent.
             open(57,file=trim(time_elapsed),form='formatted',status='unknown',access='append')
-            t1 = omp_get_wtime()
             write (57,*) i, t1-t0
             write(57,*) "Finshed.", numprocs, "processors."
             close(57)
@@ -469,7 +555,7 @@ endif
     endif ! Use RMC
 
 #ifdef USE_LMP
-    if(myid.eq.0) then
+    if(myid.eq.Ecore) then
     call lammps_close (lmp)
     endif
 #endif

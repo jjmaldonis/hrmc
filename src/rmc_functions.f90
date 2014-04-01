@@ -257,7 +257,6 @@ CONTAINS
   !Written for testing purpose here.
   !The mc move will be done some place else later, but it should still update the variables xx_cur, and xx_new (and etc).
   subroutine random_move(m,w,xx_cur,yy_cur,zz_cur,xx_new,yy_new,zz_new, alpha)
-    use mpi  
     type(model), intent(inout) :: m
     integer iseed, w
     real alpha, aa, bb, cc
