@@ -330,7 +330,7 @@ endif
             i=i+1
             t2 = MPI_wtime()
 
-            if(myid .eq. Mcore) write(*,*) "Starting step", i
+            if(myid .eq. Mcore) write(*,*) NEW_LINE('A')//"Starting step ",i
 
 #ifdef TIMING
             if( i > 100) then
@@ -351,10 +351,9 @@ if(myid .eq. Mcore) then
                 m%zz%ind(w) = zz_cur
                 call random_move(m,w,xx_cur,yy_cur,zz_cur,xx_new,yy_new,zz_new, max_move)
             end do
-            write(*,*) "I am Mcore, ie", myid, "and I moved atom", w, "to", xx_new,yy_new,zz_new, "from", xx_cur,yy_cur,zz_cur
+            !write(*,*) "I am Mcore", myid, "and I moved atom", w, "to", xx_new,yy_new,zz_new, "from", xx_cur,yy_cur,zz_cur
 endif
 call mpi_bcast(w,1,mpi_integer,Mcore,mpi_comm_world,mpierr)
-write(*,*) "CORE", myid, "ATOM=", w
 call mpi_bcast(xx_cur,1,mpi_real,Mcore,mpi_comm_world,mpierr)
 call mpi_bcast(yy_cur,1,mpi_real,Mcore,mpi_comm_world,mpierr)
 call mpi_bcast(zz_cur,1,mpi_real,Mcore,mpi_comm_world,mpierr)
@@ -364,7 +363,7 @@ call mpi_bcast(zz_new,1,mpi_real,Mcore,mpi_comm_world,mpierr)
 m%xx%ind(w) = xx_new
 m%yy%ind(w) = yy_new
 m%zz%ind(w) = zz_new
-write(*,*) "I am core", myid, "and I moved atom", w, "to", xx_new,yy_new,zz_new, "from", xx_cur,yy_cur,zz_cur
+!write(*,*) "I am core ", myid, "and I moved atom", w, "to", xx_new,yy_new,zz_new, "from", xx_cur,yy_cur,zz_cur
             ! Update hutches
             call hutch_move_atom(m,w,xx_new, yy_new, zz_new)
     
@@ -432,28 +431,24 @@ if(myid.eq.Mcore)then
                     ! Reject move
                     accepted = .false.
                     !write(*,*) "MC move rejected."
+                endif
             endif
 endif
 call mpi_bcast(accepted,1,mpi_logical,Mcore,mpi_comm_world,mpierr)
 
             if(accepted) then ! Accepted
-if(myid .le. Icores) then
-                call fem_accept_move(Icores+1, mpi_comm_world)
-endif
+                if(myid .le. Icores) call fem_accept_move(Icores+1, mpi_comm_world)
 #ifndef USE_LMP
                 if(myid .eq. Ecore) e1 = e2 ! eam
 #endif
-                chi2_old = chi2_new
+                if(myid.eq.Mcore) chi2_old = chi2_new
             else ! Rejected
                 call reject_position(m, w, xx_cur, yy_cur, zz_cur)
                 call hutch_move_atom(m,w,xx_cur, yy_cur, zz_cur)  !update hutches.
-if(myid .le. Icores) then
-                call fem_reject_move(m, w, xx_cur, yy_cur, zz_cur, Icores+1, mpi_comm_world)
-endif
+                if(myid .le. Icores) call fem_reject_move(m, w, xx_cur, yy_cur, zz_cur, Icores+1, mpi_comm_world)
 #ifndef USE_LMP
                 if(myid .eq. Ecore) e2 = e1 ! eam
 #endif
-                endif
             endif
 
             t1 = MPI_wtime()
