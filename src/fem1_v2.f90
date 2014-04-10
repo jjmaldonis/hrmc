@@ -580,6 +580,7 @@ contains
     ! use_autoslice is specified.
         use  omp_lib
         use, intrinsic :: iso_c_binding
+        include 'mpif.h'
         type(model), intent(inout) :: m_int
         real, intent(in) :: res, px, py
         real, dimension(nk), intent(in) :: k
@@ -599,7 +600,7 @@ contains
         real, allocatable, dimension(:) :: rr_x, rr_y
         real :: sqrt1_2_res
         real :: k_1
-        real :: timer1, timer2
+        double precision:: timer1, timer2
         integer :: nthr, thrnum
 
         ! --- Autoslice variables. --- !
@@ -639,7 +640,7 @@ contains
             end function islice
         end interface
 
-        !call cpu_time(timer1)
+        !timer1 = mpi_wtime()
 
         ! Regardless of whether or not we use autoslice, do the
         ! normal, fast intensity calculation for comparison.
@@ -868,10 +869,10 @@ contains
             deallocate(wobble)
         endif ! Use autoslice?
 
-        !call cpu_time(timer2)
+        !timer2 = mpi_wtime()
         !time_in_int = time_in_int + timer2-timer1
         !write (*,*) 'Total Elapsed CPU time in Intensity= ', time_in_int
-        !write (*,*) 'Intensity call took', timer2 - timer1, 'seconds on processor', myid!, 'and core', thrnum
+        !write (*,*) 'Intensity call took', timer2 - timer1!, 'seconds on processor', myid!, 'and core', thrnum
         !if(m_int%id .eq. 114) write(*,*) "Intensity for model:", m_int%id
         !if(m_int%id .eq. 114) write(*,*) int_i
         !if(m_int%id .eq. 114) write(*,*) "Intensity for model:", m_int%id, "complete."

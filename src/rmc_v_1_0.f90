@@ -97,6 +97,9 @@ program rmc
 #ifdef TIMING
     write(*,*) "Using timing version of code!"
 #endif
+#ifdef USE_LMP
+    write(*,*) "Using LAMMPS!"
+#endif
 
     call mpi_init_thread(MPI_THREAD_MULTIPLE, ipvd, mpierr) !http://www.open-mpi.org/doc/v1.5/man3/MPI_Init_thread.3.php
     call mpi_comm_rank(mpi_comm_world, myid, mpierr)
@@ -332,7 +335,7 @@ endif
 
             chi2_new = chi2_no_energy + te2
             del_chi = chi2_new - chi2_old
-            call mpi_barrier(mpi_comm_world, mpierr) ! Pretty sure this is unnecessary
+            call mpi_barrier(mpi_comm_world, mpierr)
 
             randnum = ran2(iseed2)
             ! Test if the move should be accepted or rejected based on del_chi
