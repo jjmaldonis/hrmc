@@ -35,7 +35,7 @@ opt: FCFLAGS = -O2 -openmp -fpp $(USE_LMP) $(TIMING)
 opt: CCFLAGS = -O2
 opt: ${APP}
 
-debug: FCFLAGS = -g -debug all -check all -implicitnone -warn all -openmp -fpp $(USE_LMP)
+debug: FCFLAGS = -g -debug all -check all -implicitnone -warn all -openmp -fpp $(USE_LMP) $(TIMING)
 debug: CCFLAGS = -debug all -g
 debug: ${APP}
 
