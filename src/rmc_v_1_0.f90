@@ -105,6 +105,7 @@ program rmc
     call mpi_comm_rank(mpi_comm_world, myid, mpierr)
     call mpi_comm_size(mpi_comm_world, numprocs, mpierr)
 
+    !call omp_set_num_threads(2)
     nthr = omp_get_max_threads()
     if(myid.eq.0)then
         write(*,*)
@@ -319,6 +320,23 @@ endif
 #endif
             if(myid .eq. 0) write(*,*) "Energy = ", te2
 
+            ! Calculate a randnum for accept/reject
+            randnum = ran2(iseed2)
+            accepted = .true.
+            if(log(1.0-randnum) > -(te2-chi2_old)*beta) then
+                accepted = .false.
+                call reject_position(m, w, xx_cur, yy_cur, zz_cur)
+                call hutch_move_atom(m,w,xx_cur, yy_cur, zz_cur)  !update hutches.  
+#ifndef USE_LMP
+                e2 = e1 ! eam
+#else
+                write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", w, " x ", xx_cur, " y ", yy_cur, " z ", zz_cur
+                call lammps_command(lmp, trim(lmp_cmd_str))
+#endif
+                if(myid.eq.0) write(*,*) "MC move rejected solely due to energy."
+            endif
+                
+            if(accepted) then
             ! Use multislice every 10k steps if specified.
             if(use_multislice .and. mod(i,10000) .eq. 0) then
                 call fem_update(m, w, res, k, vk, vk_as, v_background, scatfact_e, mpi_comm_world, istat, square_pixel, .true.)
@@ -337,7 +355,6 @@ endif
             del_chi = chi2_new - chi2_old
             call mpi_barrier(mpi_comm_world, mpierr)
 
-            randnum = ran2(iseed2)
             ! Test if the move should be accepted or rejected based on del_chi
             if(del_chi <0.0)then
                 ! Accept the move
@@ -367,11 +384,15 @@ endif
                     call fem_reject_move(m, w, xx_cur, yy_cur, zz_cur, mpi_comm_world)
 #ifndef USE_LMP
                     e2 = e1 ! eam
+#else
+                    write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", w, " x ", xx_cur, " y ", yy_cur, " z ", zz_cur
+                    call lammps_command(lmp, trim(lmp_cmd_str))
 #endif
                     accepted = .false.
                     if(myid.eq.0) write(*,*) "MC move rejected."
                 endif
             endif
+            endif ! if(accepted) from above
 
             if(accepted) then
                 acceptance_array(mod(i,1000)+1) = 1

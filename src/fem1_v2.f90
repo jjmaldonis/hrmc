@@ -537,7 +537,6 @@ contains
             do j=1, pa%npix
                 !write(*,*) "Calling intensity on pixel (", pa%pix(j,1), ",",pa%pix(j,2), ") in rotated model ", i, "with core", myid
                 call intensity(mrot(i), res, pa%pix(j, 1), pa%pix(j, 2), k, int_i(1:nk, j, i), int_i_as(1:nk, j, i), scatfact_e, istat, pixel_square, use_autoslice)
-                stop
                 int_sq(1:nk, j, i) = int_i(1:nk, j, i)**2
                 if(use_autoslice) int_as_sq(1:nk, j, i) = int_i_as(1:nk, j, i)**2
                 psum_int(1:nk) = psum_int(1:nk) + int_i(1:nk, j, i)
@@ -641,7 +640,7 @@ contains
             end function islice
         end interface
 
-        timer1 = mpi_wtime()
+        !timer1 = mpi_wtime()
 
         ! Regardless of whether or not we use autoslice, do the
         ! normal, fast intensity calculation for comparison.
@@ -733,7 +732,7 @@ contains
 
         ! Calculate gr_i for int_i in next loop.
         if(square_pixel) then
-            !$omp parallel do private(i, j, ii, jj, kk, rr, t1, t2, pp, r_max, x2, y2) shared(pix_atoms, A1, rr_a, const1, const2, const3, x1, y1, gr_i, int_i, znum_r, sum1, rr_x, rr_y)
+            !!$omp parallel do private(i, j, ii, jj, kk, rr, t1, t2, pp, r_max, x2, y2) shared(pix_atoms, A1, rr_a, const1, const2, const3, x1, y1, gr_i, int_i, znum_r, sum1, rr_x, rr_y)
             do i=1,size_pix_atoms
                 if((rr_x(i).le.sqrt1_2_res) .and. (rr_y(i) .le.  sqrt1_2_res))then
                     do j=i,size_pix_atoms
@@ -754,9 +753,9 @@ contains
                     enddo
                 endif
             enddo
-            !$omp end parallel do
+            !!$omp end parallel do
         else
-            !$omp parallel do private(i, j, ii, jj, kk, rr, t1, t2, pp, r_max, x2, y2) shared(pix_atoms, A1, rr_a, const1, const2, const3, x1, y1, gr_i, int_i, znum_r, sum1, rr_x, rr_y)
+            !!$omp parallel do private(i, j, ii, jj, kk, rr, t1, t2, pp, r_max, x2, y2) shared(pix_atoms, A1, rr_a, const1, const2, const3, x1, y1, gr_i, int_i, znum_r, sum1, rr_x, rr_y)
             do i=1,size_pix_atoms
                 if(rr_a(i).le.res)then
                     !if(rr_a(i) .le. res*3.0)then  !check cut-off effect
@@ -779,10 +778,10 @@ contains
                     enddo
                 endif
             enddo
-            !$omp end parallel do
+            !!$omp end parallel do
         endif
 
-        !$omp parallel do private(i, j, ii, jj, kk, rr, t1, t2, pp, r_max, x2, y2) shared(pix_atoms, A1, rr_a, const1, const2, const3, x1, y1, gr_i, int_i, znum_r, sum1, rr_x, rr_y, k)
+        !!$omp parallel do private(i, j, ii, jj, kk, rr, t1, t2, pp, r_max, x2, y2) shared(pix_atoms, A1, rr_a, const1, const2, const3, x1, y1, gr_i, int_i, znum_r, sum1, rr_x, rr_y, k)
         do i=1,nk
             do j=0,bin_max
                 do ii=1,m_int%nelements
@@ -793,7 +792,7 @@ contains
                 enddo
             end do
         end do
-        !$omp end parallel do
+        !!$omp end parallel do
 
         if(allocated(gr_i))      deallocate(gr_i)
         if(allocated(x1))        deallocate(x1,y1, rr_a, znum_r)
@@ -870,8 +869,8 @@ contains
             deallocate(wobble)
         endif ! Use autoslice?
 
-        timer2 = mpi_wtime()
-        write (*,*) 'Intensity call took', timer2 - timer1!, 'seconds on processor', myid!, 'and core', thrnum
+        !timer2 = mpi_wtime()
+        !write (*,*) 'Intensity call took', timer2 - timer1!, 'seconds on processor', myid!, 'and core', thrnum
         !time_in_int = time_in_int + timer2-timer1
         !write (*,*) 'Total Elapsed CPU time in Intensity= ', time_in_int
         !if(m_int%id .eq. 114) write(*,*) "Intensity for model:", m_int%id
