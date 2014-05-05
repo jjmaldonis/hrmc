@@ -982,6 +982,8 @@ contains
         type(model) :: moved_atom, rot_atom
         integer :: i, j, m, n, ntpix
         logical, dimension(:,:), allocatable :: update_pix
+        !integer, dimension(:,:), allocatable :: sorted_pix
+        !integer :: num_sorted_pix
         type(index_list) :: pix_il
 
         istat = 0
@@ -989,6 +991,10 @@ contains
         allocate(update_pix(nrot,pa%npix),stat=istat)
         call check_allocation(istat, 'Cannot allocate memory for pixel update array in fem.')
         update_pix = .FALSE.
+        call check_allocation(istat, 'Cannot allocate memory for pixel update array in fem.')
+        !allocate(sorted_pix(nrot*pa%npix,2),stat=istat)
+        !sorted_pix = 0
+        !num_sorted_pix = 0
 
         ! Create a new model (moved_atom) with only one atom in it and put the
         ! position etc of the moved atom into it.
@@ -1123,6 +1129,18 @@ contains
                 rot_atom%znum%ind, rot_atom%rot_i, rot_atom%znum_r%ind, stat=istat)
 
         enddo rotations
+
+        !call mpi_reduce(update_pix, update_pix, nrot*pa%npix, mpi_logical, mpi_lor, 0, comm, mpierr)
+        !call mpi_bcast (update_pix, update_pix, nrot*pa%npix, mpi_logical, mpi_lor, 0, comm, mpierr)
+        !do i=1, nrot
+        !    do m=1, pa%npix
+        !        if(update_pix(i,m)) then
+        !            num_sorted_pix = num_sorted_pix + 1
+        !            sorted_pix(num_sorted_pix,0) = i
+        !            sorted_pix(num_sorted_pix,1) = m
+        !        endif
+        !    enddo
+        !enddo
 
         ! For debugging only.
         !ntpix = 0

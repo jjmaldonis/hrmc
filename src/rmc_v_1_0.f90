@@ -251,6 +251,7 @@ endif
             gr_e_sim_cur, gr_n_sim_cur, gr_x_sim_cur, vk, scale_fac,&
             rmin_e, rmax_e, rmin_n, rmax_n, rmin_x, rmax_x, del_r_e, del_r_n, del_r_x, nk, chi2_gr, chi2_vk)
 
+        chi2_initial = chi2_no_energy
         chi2_old = chi2_no_energy + te1
 #ifndef USE_LMP
         e2 = e1 ! eam
@@ -322,7 +323,9 @@ endif
 
             ! Calculate a randnum for accept/reject
             randnum = ran2(iseed2)
+            ! Decide whether to reject just based on the energy
             accepted = .true.
+            if(chi2_initial*0.1 > chi2_no_energy) then
             if(log(1.0-randnum) > -(te2-chi2_old)*beta) then
                 accepted = .false.
                 call reject_position(m, w, xx_cur, yy_cur, zz_cur)
@@ -334,6 +337,7 @@ endif
                 call lammps_command(lmp, trim(lmp_cmd_str))
 #endif
                 if(myid.eq.0) write(*,*) "MC move rejected solely due to energy."
+            endif
             endif
                 
             if(accepted) then
