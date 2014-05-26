@@ -1,5 +1,7 @@
 rmc*.e*
 rmc*.o*
+hrmc*.out
+hrmc*.err
 gr_initial&
 vk_initial*
 energy_*
@@ -22,3 +24,4 @@ src/ran2__genmod.f90
 src/*.o
 src/*.mod
 rmc
+temp*

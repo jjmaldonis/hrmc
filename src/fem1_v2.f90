@@ -116,7 +116,7 @@ contains
 
         !if (istat /= 0) return
         if( mod(m%lx,pa%phys_diam) >= 0.001 ) then
-            write(*,*) "WARNING! Your world size should be an integer multiple of the resolution. Pixel diameter = ", pa%phys_diam, ". World size = ", m%lx
+            write(0,*) "WARNING! Your world size should be an integer multiple of the resolution. Pixel diameter = ", pa%phys_diam, ". World size = ", m%lx
         endif
 
         call read_f_e
@@ -322,8 +322,8 @@ contains
         enddo
         
         if(rot(1,1) .ne. 0.0 .or. rot(1,2) .ne. 0.0 .or. rot(1,3) .ne. 0.0) then
-            write(*,*) "WARNING: ERROR: The first rotation MUST be 0,0,0!"
-            write(*,*) "They currently are", rot(1,1), rot(1,2), rot(1,3)
+            write(0,*) "WARNING: ERROR: The first rotation MUST be 0,0,0!"
+            write(0,*) "They currently are", rot(1,1), rot(1,2), rot(1,3)
         endif
 
         deallocate(rot_temp)
@@ -346,9 +346,9 @@ contains
             ! was going on here if I didn't do this. It was a result of pa%phys_diam being
             ! larger than m%lx by a tiny amount due to rounding errors from the
             ! inputs. Not sure how best to fix it right now.
-            write(*,*)
-            write(*,*) "WARNING: There was a rounding error in init_pix, it was manually corrected but you should check to make sure nothing funny is happening."
-            write(*,*)
+            write(0,*)
+            write(0,*) "WARNING: There was a rounding error in init_pix, it was manually corrected but you should check to make sure nothing funny is happening."
+            write(0,*)
         endif
         pa%npix_1D = floor( m%lx / pa%phys_diam )
         pa%npix = pa%npix_1D**2
@@ -923,6 +923,7 @@ contains
             ! haven't gotten to yet.
             do j=mroti%rot_i(atom)%nat+1, rot_atom%natoms
                 call add_atom(mroti, atom, rot_atom%xx%ind(j), rot_atom%yy%ind(j), rot_atom%zz%ind(j), rot_atom%znum%ind(j), rot_atom%znum_r%ind(j) )
+!write(*,*) "Added to", mroti%xx%ind(mroti%rot_i(atom)%ind(j)),  mroti%yy%ind(mroti%rot_i(atom)%ind(j)), mroti%zz%ind(mroti%rot_i(atom)%ind(j))
             enddo
 
         else if( mroti%rot_i(atom)%nat .gt. rot_atom%natoms ) then
@@ -946,6 +947,7 @@ contains
             ! saves deleting rot_i(atom) and re-implementing it, as well
             ! as all the atoms it points to.
             do j=1,rot_atom%natoms
+!write(*,*) "Moving", mroti%rot_i(atom)%ind(j), "from", mroti%xx%ind(mroti%rot_i(atom)%ind(j)),  mroti%yy%ind(mroti%rot_i(atom)%ind(j)), mroti%zz%ind(mroti%rot_i(atom)%ind(j)), "to", rot_atom%xx%ind(j), rot_atom%yy%ind(j), rot_atom%zz%ind(j)
                 call move_atom(mroti, mroti%rot_i(atom)%ind(j), &
                 rot_atom%xx%ind(j), rot_atom%yy%ind(j), rot_atom%zz%ind(j) )
             enddo
@@ -1105,7 +1107,18 @@ contains
                 enddo
 
                 ! ------- Update atoms in the rotated model. ------- !
+                !write(*,*) "Moving atom", atom, mrot(i)%rot_i(atom)%nat
+                !do n=1, mrot(i)%rot_i(atom)%nat
+                !    write(*,*) "  from", mrot(i)%xx%ind(mrot(i)%rot_i(atom)%ind(n)), mrot(i)%yy%ind(mrot(i)%rot_i(atom)%ind(n)), mrot(i)%zz%ind(mrot(i)%rot_i(atom)%ind(n))
+                !enddo
+                !do n=1, rot_atom%natoms
+                !    write(*,*) "  to  ", rot_atom%xx%ind(n), rot_atom%yy%ind(n), rot_atom%zz%ind(n)
+                !enddo
                 call move_atom_in_rotated_model(atom,rot_atom,mrot(i),i)
+                !write(*,*) "Moved atom", atom, mrot(i)%rot_i(atom)%nat
+                !do n=1, mrot(i)%rot_i(atom)%nat
+                !    write(*,*) "  to  ", mrot(i)%xx%ind(mrot(i)%rot_i(atom)%ind(n)), mrot(i)%yy%ind(mrot(i)%rot_i(atom)%ind(n)), mrot(i)%zz%ind(mrot(i)%rot_i(atom)%ind(n))
+                !enddo
 
                 ! Error check!
                 do n=1, rot_atom%natoms
