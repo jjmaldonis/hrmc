@@ -1,4 +1,4 @@
-! pei
+
 ! Reverse Monte Carlo structural simulation
 !
 ! Performs RMC refinement against reduced density
