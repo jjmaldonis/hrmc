@@ -210,7 +210,7 @@ endif
 
     call fem_initialize(m, res, k, nk, ntheta, nphi, npsi, scatfact_e, istat,  square_pixel)
     allocate(vk(size(vk_exp)), vk_as(size(vk_exp)))
-    !vk = 0.0; vk_as = 0.0
+    vk = 0.0; vk_as = 0.0
 
     ! Print warning message if we are using too many cores.
     if(myid.eq.0) then
@@ -233,9 +233,7 @@ endif
 
         ! Write initial vk 
         open(unit=52,file=trim(vki_fn),form='formatted',status='unknown')
-!            write(*,*) "Writing V(k)."
             do i=1, nk
-!                write (*,*) k(i),vk(i)
                 write(52,*) k(i),vk(i)
             enddo
         close(52)
@@ -312,8 +310,6 @@ endif
             end do
             ! Update hutches, data for chi2, and chi2/del_chi
             call hutch_move_atom(m,w,xx_new, yy_new, zz_new)
-            !write(*,*) "New moved atom:", w
-            !write(*,*) "  from", xx_cur,yy_cur,zz_cur,"to", m%xx%ind(w), m%yy%ind(w), m%zz%ind(w)
     
 #ifdef USE_LMP
             write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", w, " x ", xx_new, " y ", yy_new, " z ", zz_new
@@ -327,29 +323,24 @@ endif
 
             ! Calculate a randnum for accept/reject
             randnum = ran2(iseed2)
-!            ! Decide whether to reject just based on the energy
-!            accepted = .true.
-!            if(chi2_initial*0.1 > chi2_no_energy) then
-!            if(log(1.0-randnum) > -(te2-chi2_old)*beta) then
-!                accepted = .false.
-!                call reject_position(m, w, xx_cur, yy_cur, zz_cur)
-!                call hutch_move_atom(m,w,xx_cur, yy_cur, zz_cur)  !update hutches.  
-!#ifndef USE_LMP
-!                e2 = e1 ! eam
-!#else
-!                write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", w, " x ", xx_cur, " y ", yy_cur, " z ", zz_cur
-!                call lammps_command(lmp, trim(lmp_cmd_str))
-!#endif
-!                if(myid.eq.0) write(*,*) "MC move rejected solely due to energy."
-!            endif
-!            endif
+            ! Decide whether to reject just based on the energy
+            accepted = .true.
+            if(chi2_initial*0.1 > chi2_no_energy) then
+            if(log(1.0-randnum) > -(te2-chi2_old)*beta) then
+                accepted = .false.
+                call reject_position(m, w, xx_cur, yy_cur, zz_cur)
+                call hutch_move_atom(m,w,xx_cur, yy_cur, zz_cur)  !update hutches.  
+#ifndef USE_LMP
+                e2 = e1 ! eam
+#else
+                write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", w, " x ", xx_cur, " y ", yy_cur, " z ", zz_cur
+                call lammps_command(lmp, trim(lmp_cmd_str))
+#endif
+                if(myid.eq.0) write(*,*) "MC move rejected solely due to energy."
+            endif
+            endif
                 
-            !do n=1,mrot(2)%rot_i(prev_moved_atom)%nat
-            !write(*,*) "Prev moved atom:", prev_moved_atom, mrot(2)%xx%ind(mrot(2)%rot_i(prev_moved_atom)%ind(n)), mrot(2)%yy%ind(mrot(2)%rot_i(prev_moved_atom)%ind(n)), mrot(2)%zz%ind(mrot(2)%rot_i(prev_moved_atom)%ind(n))
-            !enddo
-            !write(*,*) "New moved atom:", w
-            !write(*,*) "  from", mrot(2)%xx%ind(w), mrot(2)%yy%ind(w), mrot(2)%zz%ind(w)
-!            if(accepted) then
+            if(accepted) then
             ! Use multislice every 10k steps if specified.
             if(use_multislice .and. mod(i,10000) .eq. 0) then
                 call fem_update(m, w, res, k, vk, vk_as, v_background, scatfact_e, mpi_comm_world, istat, square_pixel, .true.)
@@ -358,7 +349,6 @@ endif
                 call fem_update(m, w, res, k, vk, vk_as, v_background, scatfact_e, mpi_comm_world, istat, square_pixel, .false.)
                 !write(*,*) "I am core", myid, "and I have exited from fem_update into the main rmc block."
             endif
-            !write(*,*) "  to  ", mrot(2)%xx%ind(w), mrot(2)%yy%ind(w), mrot(2)%zz%ind(w)
 
             chi2_no_energy = chi_square(used_data_sets,weights,gr_e, gr_e_err, &
                 gr_n, gr_x, vk_exp, vk_exp_err, gr_e_sim_new, gr_n_sim_new, &
@@ -368,13 +358,12 @@ endif
 
             chi2_new = chi2_no_energy + te2
             del_chi = chi2_new - chi2_old
-!            call mpi_barrier(mpi_comm_world, mpierr)
+            call mpi_bcast(del_chi, 1, mpi_real, 0, mpi_comm_world, mpierr)
 
             if(myid .eq. 0) write(*,*) "Energy = ", te2
             if(myid .eq. 0) write(*,*) "Del-V(k) = ", chi2_no_energy
             if(myid .eq. 0) write(*,*) "Del-chi = ", del_chi
 
-!            del_chi = 10000000.0
             ! Test if the move should be accepted or rejected based on del_chi
             if(del_chi <0.0)then
                 ! Accept the move
@@ -412,12 +401,9 @@ endif
                     if(myid.eq.0) write(*,*) "MC move rejected."
                 endif
             endif
-!            endif ! if(accepted) from above
+            endif ! if(accepted) from above
 
-            !if(accepted) then
-            !prev_moved_atom = w
-            !endif
-
+            if(myid .eq. 0) then
             if(accepted) then
                 acceptance_array(mod(i,100)+1) = 1
             else
@@ -425,7 +411,8 @@ endif
             endif
             if(i .ge. 100) avg_acceptance = sum(acceptance_array)/100.0
             ! Writing to 0 is stderr
-            if(i .ge. 100 .and. avg_acceptance .le. 0.05) write(0,*) "WARNING!  Acceptance rate is low:", avg_acceptance
+            if(i .ge. 100 .and. avg_acceptance .le. 0.05 .and. mod(i,100) .eq. 0) write(0,*) "WARNING!  Acceptance rate is low:", avg_acceptance
+            endif
 
             ! Periodically save data.
             if(myid .eq. 0) then
