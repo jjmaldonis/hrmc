@@ -9,7 +9,7 @@ module eam_mod
     real, dimension(:,:), pointer :: f
     real, dimension(:,:), pointer :: rho
     real, dimension(:,:,:), pointer :: phi
-    real, dimension(:), pointer :: e1, e2
+    double precision, dimension(:), pointer :: e1, e2
     real :: drho, dr, eam_max_r
     logical, dimension(:), pointer :: not_counted
     integer :: nrho,  nr, nelements
@@ -212,7 +212,7 @@ contains
         integer:: nlist, rbin, rhobin
         real :: xij, yij, zij, r, r2
         real :: phi1, phi2, rho1, rho2
-        real, intent(out) :: te1
+        double precision, intent(out) :: te1
         integer :: istat
         do i=1, m%natoms
         phi2 = 0.0
@@ -319,7 +319,7 @@ contains
         integer:: nlist1, nlist2, nlist3, nlist4, rbin, rhobin
         real :: xij, yij, zij, r, r2
         real :: phi1, phi2, rho1, rho2
-        real, intent(out) :: te2
+        double precision, intent(out) :: te2
         real, intent(in) :: xx_cur, yy_cur, zz_cur, xx_new, yy_new, zz_new 
         integer :: istat
         not_counted = .true.

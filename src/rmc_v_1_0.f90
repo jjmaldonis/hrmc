@@ -69,7 +69,8 @@ program rmc
     real, pointer, dimension(:,:) :: cutoff_r 
     real, pointer, dimension(:,:) :: scatfact_e
     real :: xx_cur, yy_cur, zz_cur, xx_new, yy_new, zz_new
-    real :: chi2_old, chi2_new, scale_fac, scale_fac_initial, del_chi, beta, chi2_gr, chi2_vk, chi2_no_energy, chi2_initial
+    real :: scale_fac, scale_fac_initial, beta
+    double precision :: chi2_old, chi2_new, del_chi, chi2_gr, chi2_vk, chi2_no_energy, chi2_initial
     real :: rmin_e, rmax_e
     real :: rmin_n, rmax_n
     real :: rmin_x, rmax_x
@@ -84,7 +85,7 @@ program rmc
     integer :: iseed2
     real :: randnum
 #ifndef USE_LMP
-    real :: te1, te2 ! For eam, not lammps version of energy
+    double precision :: te1, te2 ! For eam, not lammps version of energy
 #endif
     logical :: square_pixel, accepted, use_rmc, use_multislice
     integer :: ipvd, nthr

@@ -59,11 +59,11 @@ CONTAINS
         real, intent(in) :: scale_fac, rmin_e, rmax_e, rmin_n, rmax_n, rmin_x, rmax_x 
         real, intent (in) :: del_r_e, del_r_n, del_r_x  
         integer, intent(in) ::nk
-        real, intent(out) :: chi2_gr, chi2_vk
+        double precision, intent(out) :: chi2_gr, chi2_vk
         integer i, j
         integer nf   !normalization factor   - jwh 04/25/2009
-        real chi_square
-        real,dimension(4) :: sum1 !record summation of each contribution from diffraction data and fem data
+        double precision :: chi_square
+        double precision,dimension(4) :: sum1 !record summation of each contribution from diffraction data and fem data
         sum1=0.0
         chi_square=1.0
         
