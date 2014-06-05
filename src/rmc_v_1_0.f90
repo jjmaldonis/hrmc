@@ -251,7 +251,7 @@ endif
             rmin_e, rmax_e, rmin_n, rmax_n, rmin_x, rmax_x, del_r_e, del_r_n, del_r_x, nk, chi2_gr, chi2_vk)
 
         chi2_initial = chi2_no_energy
-        chi2_old = chi2_no_energy + te1
+        chi2_old = chi2_no_energy + te1/m%natoms
 #ifndef USE_LMP
         e2 = e1 ! eam
 #endif
@@ -267,11 +267,13 @@ endif
             write(*,*) "   Temperature =", temperature
             write(*,*)
             ! Reset time_elapsed, energy_function, chi_squared_file
+#ifdef TIMING
             open(35,file=trim(time_elapsed),form='formatted',status='unknown')
                 t1 = omp_get_wtime()
                 write(35,*) numprocs, "processors are being used."
                 write(35,*) "Step, Time elapsed, Avg time per step, This step's time"
             close(35)
+#endif
             open(36,file=trim(chi_squared_file),form='formatted',status='unknown')
                 write(36,*) "step, chi2, energy"
                 write(36,*) i, chi2_no_energy, te1
@@ -326,7 +328,7 @@ endif
             ! Decide whether to reject just based on the energy
             accepted = .true.
             if(chi2_initial*0.1 > chi2_no_energy) then
-            if(log(1.0-randnum) > -(te2-chi2_old)*beta) then
+            if(log(1.0-randnum) > -(te2/m%natoms-chi2_old)*beta) then
                 accepted = .false.
                 call reject_position(m, w, xx_cur, yy_cur, zz_cur)
                 call hutch_move_atom(m,w,xx_cur, yy_cur, zz_cur)  !update hutches.  
@@ -356,7 +358,7 @@ endif
                 rmin_x, rmax_x, del_r_e, del_r_n, del_r_x, nk, chi2_gr, chi2_vk)
 
 
-            chi2_new = chi2_no_energy + te2
+            chi2_new = chi2_no_energy + te2/m%natoms
             del_chi = chi2_new - chi2_old
             call mpi_bcast(del_chi, 1, mpi_real, 0, mpi_comm_world, mpierr)
 
@@ -449,6 +451,7 @@ endif
                     close(36)
                 endif
             endif
+#ifdef TIMING
             if(mod(i,1)==0)then
                 ! Write to time_elapsed
                 open(35,file=trim(time_elapsed),form='formatted',status='unknown',access='append')
@@ -456,6 +459,7 @@ endif
                     write (35,*) i, t1-t0, (t1-t0)/i, t1-t2
                 close(35)
             endif
+#endif
             if(mod(i,100)==0 .and. i .ge. 100)then
                 ! Write to acceptance rate
                 open(40,file=trim(acceptance_rate_fn),form='formatted',status='unknown',access='append')
@@ -495,12 +499,14 @@ endif
             open(56,file=trim(energy_fn),form='formatted', status='unknown',access='append')
             write(56,*) i, te2
             close(56)
+#ifdef TIMING
             ! Write final time spent.
             open(57,file=trim(time_elapsed),form='formatted',status='unknown',access='append')
             t1 = omp_get_wtime()
             write (57,*) i, t1-t0
             write(57,*) "Finshed.", numprocs, "processors."
             close(57)
+#endif
         endif
     endif ! Use RMC
 
