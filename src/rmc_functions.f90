@@ -210,6 +210,7 @@ CONTAINS
             !do not count the pair distance to itself
             ! The below if statement should be irrelevant. moved_atom isn't put
             ! in atoms by hutch_list_3d as far as i know.
+            check_cutoffs = .true.  !jwh 032409
             if (atoms(i) .ne. moved_atom) then
                 do j=1, m%nelements
                     if(m%atom_type(j) .eq. m%znum%ind(atoms(i))) then
@@ -222,12 +223,9 @@ CONTAINS
                
                 !calculate the atomic distance
                 !compare with cutoff_r
-                temp_x = abs(m%xx%ind(moved_atom) - m%xx%ind(atoms(i)))  !pbc added - jwh 04/14/2009
-                temp_y = abs(m%yy%ind(moved_atom) - m%yy%ind(atoms(i)))
-                temp_z = abs(m%zz%ind(moved_atom) - m%zz%ind(atoms(i)))
-
-                !write(*,*)"abs=", temp_x, temp_y, temp_z
-                
+                temp_x = m%xx%ind(moved_atom) - m%xx%ind(atoms(i))  !pbc added - jwh 04/14/2009
+                temp_y = m%yy%ind(moved_atom) - m%yy%ind(atoms(i))
+                temp_z = m%zz%ind(moved_atom) - m%zz%ind(atoms(i))
                 temp_x = temp_x - m%lx*anint(temp_x/m%lx)
                 temp_y = temp_y - m%ly*anint(temp_y/m%ly)
                 temp_z = temp_z - m%lz*anint(temp_z/m%lz)
@@ -236,11 +234,9 @@ CONTAINS
                 dist_pair = sqrt(dist_pair)
                    
                 if (dist_pair  .lt. cutoff_r(num1, num2)) then
-                    !write(*,*)dist_pair  , cutoff_r(num1, num2) !debug - jwh 032409
+                    !write(*,*)"DEBUG", dist_pair  , cutoff_r(num1, num2) !debug - jwh 032409
                     check_cutoffs=.false.
                     exit
-                else
-                    check_cutoffs = .true.  !jwh 032409
                 endif
             endif !032409 - jwh
         enddo !i=1, (nlist-1)
