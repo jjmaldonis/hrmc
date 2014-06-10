@@ -207,6 +207,7 @@ endif
     call read_eam(m)
     call eam_initial(m,te1)
 #endif
+    te1 = te1/m%natoms
     if(myid .eq. 0) write(*,*) "Energy = ", te1
 
     call fem_initialize(m, res, k, nk, ntheta, nphi, npsi, scatfact_e, istat,  square_pixel)
@@ -252,7 +253,7 @@ endif
             rmin_e, rmax_e, rmin_n, rmax_n, rmin_x, rmax_x, del_r_e, del_r_n, del_r_x, nk, chi2_gr, chi2_vk)
 
         chi2_initial = chi2_no_energy
-        chi2_old = chi2_no_energy + te1/m%natoms
+        chi2_old = chi2_no_energy + te1
 #ifndef USE_LMP
         e2 = e1 ! eam
 #endif
@@ -322,6 +323,7 @@ endif
 #else
             call eam_mc(m, w, xx_cur, yy_cur, zz_cur, xx_new, yy_new, zz_new, te2)
 #endif
+            te2 = te2/m%natoms
             !if(myid .eq. 0) write(*,*) "Energy = ", te2
 
             ! Calculate a randnum for accept/reject
@@ -329,7 +331,7 @@ endif
             ! Decide whether to reject just based on the energy
             accepted = .true.
             if(chi2_initial*0.1 > chi2_no_energy) then
-            if(log(1.0-randnum) > -(te2/m%natoms-chi2_old)*beta) then
+            if(log(1.0-randnum) > -(te2-chi2_old)*beta) then
                 accepted = .false.
                 call reject_position(m, w, xx_cur, yy_cur, zz_cur)
                 call hutch_move_atom(m,w,xx_cur, yy_cur, zz_cur)  !update hutches.  
@@ -359,7 +361,7 @@ endif
                 rmin_x, rmax_x, del_r_e, del_r_n, del_r_x, nk, chi2_gr, chi2_vk)
 
 
-            chi2_new = chi2_no_energy + te2/m%natoms
+            chi2_new = chi2_no_energy + te2
             del_chi = chi2_new - chi2_old
             call mpi_bcast(del_chi, 1, mpi_real, 0, mpi_comm_world, mpierr)
 

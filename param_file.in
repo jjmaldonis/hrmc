@@ -1,7 +1,7 @@
 #parameter file opened. set a filename to # to ignore it
 pei/Zr50Cu35Al15_start.xyz
 1  !starting step number
-200000.0    !starting temperature (assuming starting step is 1, not what you set it at)
+2000.0    !starting temperature (assuming starting step is 1, not what you set it at)
 1.5    !maximum move distance
 !cut off: nxn matrix 11 21 31/ 12 22 32/ 13 23 33/  (1 is the lowest atom# species) 
 2.272 2.272 2.272
