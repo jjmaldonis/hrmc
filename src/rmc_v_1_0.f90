@@ -365,7 +365,7 @@ endif
             chi2_new = chi2_no_energy + te2
             chi2_new = chi2_new * m%natoms
             del_chi = chi2_new - chi2_old
-            call mpi_bcast(del_chi, 1, mpi_real, 0, mpi_comm_world, mpierr)
+            call mpi_bcast(del_chi, 1, mpi_double, 0, mpi_comm_world, mpierr)
 
             if(myid .eq. 0) write(*,*) "Energy = ", te2
             if(myid .eq. 0) write(*,*) "Del-V(k) = ", chi2_no_energy
