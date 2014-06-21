@@ -254,6 +254,7 @@ endif
 
         chi2_initial = chi2_no_energy
         chi2_old = chi2_no_energy + te1
+        chi2_old = chi2_old * m%natoms
 #ifndef USE_LMP
         e2 = e1 ! eam
 #endif
@@ -362,12 +363,15 @@ endif
 
 
             chi2_new = chi2_no_energy + te2
+            chi2_new = chi2_new * m%natoms
             del_chi = chi2_new - chi2_old
             call mpi_bcast(del_chi, 1, mpi_real, 0, mpi_comm_world, mpierr)
 
             if(myid .eq. 0) write(*,*) "Energy = ", te2
             if(myid .eq. 0) write(*,*) "Del-V(k) = ", chi2_no_energy
             if(myid .eq. 0) write(*,*) "Del-chi = ", del_chi
+            if(myid .eq. 0) write(*,*) "chi2_old = ", chi2_old
+            if(myid .eq. 0) write(*,*) "chi2_new = ", chi2_new
 
             ! Test if the move should be accepted or rejected based on del_chi
             if(del_chi <0.0)then
@@ -445,14 +449,28 @@ endif
                     enddo
                     write(33,*)"-1"
                 close(33)
+                !do j=myid+1,nrot,numprocs
+                !    write(myid_str,*) j
+                !    !output_model_fn = trim(trim(trim(trim(trim(trim(output_model_fn)//jobID)//"_")//step_str)//"_")//myid_str)//".xyz"
+                !    output_model_fn = trim(trim("mrot_model")//trim(myid_str))
+                !    !write(*,*) trim(output_model_fn)
+                !    open(33,file=trim(output_model_fn),form='formatted',status='unknown')
+                !        write(33,*)"mrot model. rot=", j, "step=",i
+                !        write(33,*)m%lx,m%ly,m%lz
+                !        do ii=1,mrot(j)%natoms
+                !            write(33,*)mrot(j)%znum%ind(ii), mrot(j)%xx%ind(ii), mrot(j)%yy%ind(ii), mrot(j)%zz%ind(ii)
+                !        enddo
+                !        write(33,*)"-1"
+                !    close(33)
+                !enddo
             endif
             if(mod(i,1)==0)then
-                if(accepted) then
+                !if(accepted) then
                     ! Write chi2 info
                     open(36,file=trim(chi_squared_file),form='formatted',status='unknown',access='append')
                         write(36,*) i, chi2_no_energy, te2
                     close(36)
-                endif
+                !endif
             endif
 #ifdef TIMING
             if(mod(i,1)==0)then
