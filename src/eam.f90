@@ -18,9 +18,10 @@ contains
 
     ! Reads tabulated eam potential data
     ! Only called once in rmc to initialize data.
-    subroutine read_eam(m)
+    subroutine read_eam(m,eamfile)
         implicit none
         type(model), intent(in) :: m
+        character (len=80) :: eamfile
         integer :: i, j, k, w, q, ii, jj
         integer, dimension(:), allocatable :: znum
         integer :: istat
@@ -34,7 +35,10 @@ contains
         real, dimension(:,:,:), allocatable :: phi_temp2
         integer :: line
 
-        open(unit=71,file="ZrCuAl2011.eam.alloy",form='formatted',status='unknown')
+        write(*,*) trim(adjustl(eamfile)), "DEBUG"
+        open(unit=71,file=trim(eamfile),iostat=istat,form='formatted',status='unknown')
+        !open(unit=71,file=eamfile,iostat=istat,form='formatted',status='unknown')
+        !open(unit=71,file="ZrCuAl2011.eam.alloy",form='formatted',status='unknown')
         read(71,*)  !comment line
         read(71,*)  !comment line
         read(71,*)  !comment line

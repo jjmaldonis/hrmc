@@ -6,24 +6,9 @@
 ! diffraction data and against fluctuation electron
 ! microscopy V(k) data.
 !
-! Voyles research group: Jinwoo Hwang, Feng, Yi, and
+! Voyles research group: Jason Maldonis, Jinwoo Hwang, Feng, Yi, and
 ! Paul Voyles, begun 12/16/08
 ! 
-! merged with version of fy, 12/20/08, pmv
-! more program flow added 12/20/08 pmv
-! add new variable: electron scattering coefficients for calculating
-! which are a_e, b_e, c_e and d_e
-! add new module scattering_factors, add USE without :: following them for
-! visual fortran debug by fy on 12/23
-! need to not define gr_sim etc. arrays
-! Re-written by Jinwoo Hwang - 03/20/2009
-! Hard sphere cutoff applied.
-! Debugged and tested by Jinwoo Hwang - 03/25/2009
-! Vk allocated before initial Vk - JWH 04/02/2009
-! hutch_move_atom added in reject part - JWH 04/15/2009.
-! gr_e_err is added - jwh 04/25/2009
-! See commit history for changes by jjm on Github: (check all branches)
-!   https://github.com/refreshx2/OdieCode/tree/master/060911_rmc_eam_gr_vk_t4
 
 program rmc
 
@@ -51,37 +36,27 @@ program rmc
     ! RMC / Femsim objects
     type(model) :: m
     character (len=256) :: model_filename
-    character (len=256) :: param_filename  
+    character (len=256) :: param_filename
+    character (len=256) :: eam_filename
     character (len=256) :: outbase
     character (len=256) :: jobID, c, step_str
     character (len=512) :: comment
-    character (len=256) :: time_elapsed, vki_fn, vku_fn, vkf_fn, output_model_fn, energy_fn, final_model_fn, gri_fn, chi_squared_file, acceptance_rate_fn, beta_fn
-    logical, dimension(4) :: used_data_sets
+    character (len=256) :: time_elapsed, vki_fn, vku_fn, vkf_fn, output_model_fn, energy_fn, final_model_fn, chi_squared_file, acceptance_rate_fn, beta_fn
     real :: temperature
     real :: max_move
-    real :: Q, res
-    real :: pixel_distance
-    real, dimension(4) :: weights
-    real, pointer, dimension(:) :: gr_e,r_e,gr_e_err
-    real, pointer, dimension(:) :: gr_n,r_n
-    real, pointer, dimension(:) :: gr_x,r_x
+    real :: Q, res, alpha
     real, pointer, dimension(:) :: vk, vk_exp, k, vk_exp_err, v_background, vk_as !vk_as is for autoslice/multislice (whatever it's called)
     real, pointer, dimension(:,:) :: cutoff_r 
     real, pointer, dimension(:,:) :: scatfact_e
     real :: xx_cur, yy_cur, zz_cur, xx_new, yy_new, zz_new
     real :: scale_fac, scale_fac_initial, beta
     double precision :: chi2_old, chi2_new, del_chi, chi2_gr, chi2_vk, chi2_no_energy, chi2_initial
-    real :: rmin_e, rmax_e
-    real :: rmin_n, rmax_n
-    real :: rmin_x, rmax_x
     real :: R
     integer :: i, j
     integer :: w
     integer :: nk
     integer :: ntheta, nphi, npsi
-    integer :: fem_algorithm
     integer :: istat, status2, length
-    integer :: total_steps
     integer :: iseed2
     real :: randnum
 #ifndef USE_LMP
@@ -154,8 +129,6 @@ if(myid .eq. 0) then
     final_model_fn = trim(trim(final_model_fn)//jobID)//".txt"
     write(energy_fn, "(A6)") "energy"
     energy_fn = trim(trim(energy_fn)//jobID)//".txt"
-    write(gri_fn, "(A10)") "gr_initial"
-    gri_fn = trim(trim(gri_fn)//jobID)//".txt"
     write(chi_squared_file, "(A11)") "chi_squared"
     chi_squared_file = trim(trim(chi_squared_file)//jobID)//".txt"
     write(acceptance_rate_fn, "(A15)") "acceptance_rate"
@@ -179,11 +152,7 @@ endif
 
     ! Read input parameters
     allocate(cutoff_r(m%nelements,m%nelements),stat=istat)
-    call read_inputs(param_filename,model_filename,temperature, max_move, cutoff_r, &
-        used_data_sets, weights, gr_e, r_e, gr_e_err, gr_n, r_n, gr_x, &
-        r_x, vk_exp, k, vk_exp_err, v_background, ntheta, nphi, npsi, &
-        scale_fac_initial, Q, fem_algorithm, pixel_distance, total_steps, &
-        rmin_e, rmax_e, rmin_n, rmax_n, rmin_x, rmax_x, status2)
+    call read_inputs(param_filename,model_filename, eam_filename, temperature, max_move, cutoff_r, alpha, vk_exp, k, vk_exp_err, v_background, ntheta, nphi, npsi, scale_fac_initial, Q, status2)
 
     if(myid .eq. 0) then
     write(*,*) "Model filename: ", trim(model_filename)
@@ -204,7 +173,7 @@ endif
     call lammps_command (lmp, 'run 0')
     call lammps_extract_compute (te1, lmp, 'pot', 0, 0)
 #else
-    call read_eam(m)
+    call read_eam(m,eam_filename)
     call eam_initial(m,te1)
 #endif
     te1 = te1/m%natoms
@@ -248,9 +217,7 @@ endif
     if(use_rmc) then ! End here if we only want femsim. Set the variable above.
 
         ! Calculate initial chi2
-        chi2_no_energy = chi_square(used_data_sets,weights,gr_e, gr_e_err, gr_n, gr_x, vk_exp, vk_exp_err, &
-            gr_e_sim_cur, gr_n_sim_cur, gr_x_sim_cur, vk, scale_fac,&
-            rmin_e, rmax_e, rmin_n, rmax_n, rmin_x, rmax_x, del_r_e, del_r_n, del_r_x, nk, chi2_gr, chi2_vk)
+        chi2_no_energy = chi_square(alpha,vk_exp, vk_exp_err, vk, scale_fac, nk)
 
         chi2_initial = chi2_no_energy
         chi2_old = chi2_no_energy + te1
@@ -356,10 +323,7 @@ endif
                 !write(*,*) "I am core", myid, "and I have exited from fem_update into the main rmc block."
             endif
 
-            chi2_no_energy = chi_square(used_data_sets,weights,gr_e, gr_e_err, &
-                gr_n, gr_x, vk_exp, vk_exp_err, gr_e_sim_new, gr_n_sim_new, &
-                gr_x_sim_new, vk, scale_fac, rmin_e, rmax_e, rmin_n, rmax_n, &
-                rmin_x, rmax_x, del_r_e, del_r_n, del_r_x, nk, chi2_gr, chi2_vk)
+            chi2_no_energy = chi_square(alpha, vk_exp, vk_exp_err, vk, scale_fac, nk)
 
 
             chi2_new = chi2_no_energy + te2

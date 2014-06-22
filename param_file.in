@@ -1,25 +1,14 @@
 #parameter file opened. set a filename to # to ignore it
 pei/Zr50Cu35Al15_start.xyz
-1  !starting step number
+pei/fem_exp_Zr54Cu38Al8_t3.txt
+ZrCuAl2011.eam.alloy
 200000.0    !starting temperature (assuming starting step is 1, not what you set it at)
 1.5    !maximum move distance
-!cut off: nxn matrix 11 21 31/ 12 22 32/ 13 23 33/  (1 is the lowest atom# species) 
+#cut off: nxn matrix 11 21 31/ 12 22 32/ 13 23 33/  (1 is the lowest atom# species) 
 2.272 2.272 2.272
 2.272 2.272 2.272
 2.272 2.272 2.272
-#
-0	!weight of electron scattering
-0  0 !rmin_e rmax_e
-#
-0
-0  0
-# xrd_zr50_kramer_reduced.txt
-0 #3290.0	!weight of xrd gr
-0 0 #1.68  10.0
-pei/fem_exp_Zr54Cu38Al8_t3.txt
 0.44	 !weight of fem; alpha
 28.6378  !scaling factor for exp Vk; beta
 1 40 20 	 !# of rotations(nphi, npsi, ntheta) 1 40 20
 0.0305 !Q (inverse angstrom)
-1	 !fem algorithm
-13.0	 !pixel distance

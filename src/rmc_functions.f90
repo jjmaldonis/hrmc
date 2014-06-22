@@ -6,17 +6,6 @@
 !    function chi_square, check_cutoffs and generate_move are included
 !
 
-! Changelog
-!    unused arguments (r_e etc) removed from chi_sqaure, 12/20/08 pmv
-!    subroutine random_move updated. 01/12/08 Jinwoo Hwang
-!    function check_cufoff is completed by Feng Yi on 01/16/2009, may need a test program
-!    check_cutoffs is modified by Feng Yi on 01/21/2009
-!    removed "use ReadInputs" which doesn't seem to be needed; pmv 1/23/09
-!    added interface block for function ran2 to enable clean compilation pmv 03/12/09
-!    In check_cutoffs, pbc is added to the pair calculation after the hutch is calling. jwh 04/14/2009
-!    Added deallocate(atoms) in check_cutoffs, pmv 04/17/09
-!    change if condition when deallocate(atoms) in check_cutoffs, FY 04/17/2009
-!    gr_e_err is added - jwh 04/25/2009
 
 MODULE rmc_functions
 
@@ -34,98 +23,32 @@ CONTAINS
 
     !***************************************************************
     !This function is used to calculate chi square
-    FUNCTION chi_square(used_data_sets,weights,gr_e, gr_e_err, gr_n, gr_x, V, V_err,&
-            gr_e_sim, gr_n_sim, gr_x_sim, V_sim, scale_fac,&
-            rmin_e, rmax_e, rmin_n, rmax_n, rmin_x, rmax_x, del_r_e, del_r_n, del_r_x, nk, chi2_gr, chi2_vk)
+    function chi_square(alpha,vk_exp, vk_exp_err, vk, scale_fac, nk)
 
-        !used_data_sets=A logical array determine whether electron, neutron, X-ray or FEM data are available
-        !gr_e electron G(r) data
-        !gr_n neutron G(r) data
-        !gr_x X-ray G(r) data
         !V=FEM intensity variance from input file
         !V_err=FEM measurement variance error
-        !gr_e_sim=simulated g(r) for electron scattering
-        !gr_n_sim=simulated g(r) for neutron scattering
-        !gr_x_sim=simulated g(r) for X-ray scattering
         !V_sim=simulated V(k) for variance data
-        logical, dimension(4) :: used_data_sets
-        real,  dimension(4) :: weights
-        real, pointer, dimension(:) :: gr_e, gr_e_err
-        real, pointer, dimension(:) :: gr_n
-        real, pointer, dimension(:) :: gr_x
-        real, pointer, dimension(:) :: v, v_err
-        real, pointer, dimension(:) :: gr_e_sim,gr_n_sim,gr_x_sim
-        real, pointer, dimension(:) :: v_sim
-        real, intent(in) :: scale_fac, rmin_e, rmax_e, rmin_n, rmax_n, rmin_x, rmax_x 
-        real, intent (in) :: del_r_e, del_r_n, del_r_x  
+        real :: alpha
+        real, pointer, dimension(:) :: vk_exp, vk_exp_err
+        real, pointer, dimension(:) :: vk
+        real, intent(in) :: scale_fac
         integer, intent(in) ::nk
-        double precision, intent(out) :: chi2_gr, chi2_vk
         integer i, j
         integer nf   !normalization factor   - jwh 04/25/2009
         double precision :: chi_square
-        double precision,dimension(4) :: sum1 !record summation of each contribution from diffraction data and fem data
-        sum1=0.0
         chi_square=1.0
         
-        !Electron diffraction data
-        i=1
-        if(used_data_sets(i)) then
-           !sum1(i)=sum((gr_e_sim-gr_e)**2)*weights(i)
-            nf = 0
-            do j=int(rmin_e/del_r_e)+1, int(rmax_e/del_r_e)+1    !jwh -032409
-                nf = nf + 1
-                sum1(i) = sum1(i)+weights(i)*((gr_e_sim(j)-gr_e(j))/gr_e_err(j))**2
-            enddo
-            sum1(i) = sum1(i)/nf
-        endif
-        
-        !Neutron diffraction data
-        i=i+1
-        if(used_data_sets(i)) then
-           !sum1(i)=sum((gr_n_sim-gr_n)**2)*weights(i)
-            nf = 0
-            do j=int(rmin_n/del_r_n)+1, int(rmax_n/del_r_n)+1    !jwh -032409
-                nf = nf +1
-                sum1(i) = sum1(i)+weights(i)*(gr_n_sim(j)-gr_n(j))**2
-            enddo
-            sum1(i) = sum1(i)/nf
-        endif
-        
-        !X-ray diffraction data
-        i=i+1
-        if(used_data_sets(i)) then
-           !sum1(i)=sum((gr_x_sim-gr_x)**2)*weights(i)
-            nf = 0
-            do j=int(rmin_x/del_r_x)+1, int(rmax_x/del_r_x)+1    !jwh -032409
-                nf = nf + 1
-                sum1(i) = sum1(i)+weights(i)*(gr_x_sim(j)-gr_x(j))**2
-            enddo
-            sum1(i) = sum1(i)/nf
-        endif
-        
         !FEM data
-        i=i+1
-        !write(*,*) "DEBUG: sum1(i) starts at:", sum1(i)
-        if(used_data_sets(i)) then
-           !sum1(i)=sum(((V_sim-V*scale_fac)/(scale_fac*V_err))**2)*weights(i)
-            nf = 0
-            do j=1,nk
-                nf = nf + 1
-                !write(*,*) "DEBUG: weights(4)=", weights(4)
-                !write(*,*) "DEBUG: v(j)*scale_fac-v_sim(j)=", v(j)*scale_fac-v_sim(j)
-                !write(*,*) "DEBUG: scale_fac*V_err(j)=", scale_fac*V_err(j)
-                !write(*,*) "DEBUG: Total addition is:", weights(4)*((v(j)*scale_fac-v_sim(j))/(scale_fac*V_err(j)))**2
-                sum1(i) = sum1(i)+weights(4)*((v(j)*scale_fac-v_sim(j))/(scale_fac*V_err(j)))**2
-                !write(*,*) "DEBUG: New sum1(i)=", sum1(i)
-            enddo
-            sum1(i) = sum1(i)/nf
-            !write(*,*) "DEBUG: Final sum1(i) = sum1(i)/nf=", sum1(i)
-            !write(*,*) "DEBUG: where nf=", nf
-        endif
+        nf = 0
+        do j=1,nk
+            nf = nf + 1
+            !write(*,*) "DEBUG: v(j)*scale_fac-v_sim(j)=", v(j)*scale_fac-v_sim(j)
+            !write(*,*) "DEBUG: scale_fac*V_err(j)=", scale_fac*V_err(j)
+            !write(*,*) "DEBUG: Total addition is:", alpha*((v(j)*scale_fac-v_sim(j))/(scale_fac*V_err(j)))**2
+            chi_square = chi_square+alpha*((vk_exp(j)*scale_fac-vk(j))/(scale_fac*vk_exp_err(j)))**2
+        enddo
+        chi_square = chi_square/nf
 
-        chi2_gr = sum1(3)
-        chi2_vk = sum1(4)
-        chi_square=sum(sum1)
     end function chi_square
 
 
