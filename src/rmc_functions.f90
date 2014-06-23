@@ -36,7 +36,7 @@ CONTAINS
         integer i, j
         integer nf   !normalization factor   - jwh 04/25/2009
         double precision :: chi_square
-        chi_square=1.0
+        chi_square=0.0
         
         !FEM data
         nf = 0
