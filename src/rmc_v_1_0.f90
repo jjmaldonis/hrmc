@@ -221,7 +221,7 @@ endif
 
         chi2_initial = chi2_no_energy
         chi2_old = chi2_no_energy + te1
-        chi2_old = chi2_old * m%natoms
+        !chi2_old = chi2_old * m%natoms
 #ifndef USE_LMP
         e2 = e1 ! eam
 #endif
@@ -327,7 +327,7 @@ endif
 
 
             chi2_new = chi2_no_energy + te2
-            chi2_new = chi2_new * m%natoms
+            !chi2_new = chi2_new * m%natoms
             del_chi = chi2_new - chi2_old
             call mpi_bcast(del_chi, 1, mpi_double, 0, mpi_comm_world, mpierr)
 
