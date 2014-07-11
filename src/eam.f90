@@ -33,17 +33,48 @@ contains
         real, dimension(:,:), allocatable  :: f_temp2
         real, dimension(:,:), allocatable  :: rho_temp2
         real, dimension(:,:,:), allocatable :: phi_temp2
+        integer, dimension(:), allocatable :: reorder
+        integer, dimension(:), allocatable :: atomic_numbers
+        character (len=2), dimension(:), allocatable :: atom_syms
+        character (len=2), dimension(103) :: all_atom_syms
         integer :: line
 
-        write(*,*) trim(adjustl(eamfile)), "DEBUG"
+        all_atom_syms = (/'H','He','Li','Be','B','C','N','O','F','Ne','Na','Mg','Al','Si','P','S','Cl','Ar','K','Ca','Sc','Ti','V','Cr','Mn','Fe','Co','Ni','Cu','Zn','Ga','Ge','As','Se','Br','Kr','Rb','Sr','Y','Zr','Nb','Mo','Tc','Ru','Rh','Pd','Ag','Cd','In','Sn','Sb','Te','I','Xe','Cs','Ba','La','Ce','Pr','Nd','Pm','Sm','Eu','Gd','Tb','Dy','Ho','Er','Tm','Yb','Lu','Hf','Ta','W','Re','Os','Ir','Pt','Au','Hg','Tl','Pb','Bi','Po','At','Rn','Fr','Ra','Ac','Th','Pa','U','Np','Pu','Am','Cm','Bk','Cf','Es','Fm','Md','No','Lr'/)
+
         open(unit=71,file=trim(eamfile),iostat=istat,form='formatted',status='unknown')
-        !open(unit=71,file=eamfile,iostat=istat,form='formatted',status='unknown')
-        !open(unit=71,file="ZrCuAl2011.eam.alloy",form='formatted',status='unknown')
         read(71,*)  !comment line
         read(71,*)  !comment line
         read(71,*)  !comment line
         read(71,*) nelements
+        allocate(atom_syms(nelements))
+        allocate(atomic_numbers(nelements))
+        allocate(reorder(nelements))
+        rewind(71)
+        read(71,*)  !comment line
+        read(71,*)  !comment line
+        read(71,*)  !comment line
+        read(71,*) nelements, atom_syms
         read(71,*) nrho, drho, nr, dr, eam_max_r
+
+        do i=1, nelements
+            do j=1, 103
+                if( trim(atom_syms(i)) .eq. trim(all_atom_syms(j)) ) then
+                    atomic_numbers(i) = j
+                endif
+            enddo
+        enddo
+        do i=1, nelements
+            do j=1, m%nelements
+                if(atomic_numbers(i) .eq. m%atom_type(j)) then
+                    reorder(i) = j
+                endif
+            enddo
+        enddo
+
+        if(myid.eq.0) write(*,*) "Atom types in EAM file: sym, Z, reorder#"
+        do i=1, nelements
+            if(myid.eq.0) write(*,*) "  ",atom_syms(i), atomic_numbers(i), reorder(i)
+        enddo
 
         allocate(znum(nelements))
         allocate(mass(nelements), latt_const(nelements))
@@ -126,65 +157,38 @@ contains
             enddo
         enddo
 
+        ! The elements in the eam file may not be in increasing
+        ! atomic order (which is how znumr is set up) so we need
+        ! to reorder if necessary. I set this up at the beginning.
         do i=1, nelements
             do j=1, nelements
                 do k=1, nr  
-                    if(i.eq.1)then
-                        ii = 3
-                    endif
-                    if(i.eq.2)then
-                        ii = 2
-                    endif
-                    if(i.eq.3)then
-                        ii = 1
-                    endif
-                    if(j.eq.1)then
-                        jj = 3
-                    endif
-                    if(j.eq.2)then
-                        jj = 2
-                    endif
-                    if(j.eq.3)then
-                        jj = 1
-                    endif       
-            
-                    phi(ii, jj, k) =  phi_temp2(i, j, k)
-                    rho(ii, k) = rho_temp2(i, k)
+                    phi(reorder(i), reorder(j), k) =  phi_temp2(i, j, k)
+                    rho(reorder(i), k) = rho_temp2(i, k)
                 enddo
             enddo
         enddo
-
         do i=1, nelements
             do j=1, nelements
                 do k=1, nrho
-                    if(i.eq.1)then
-                        ii = 3
-                    endif
-                    if(i.eq.2)then
-                        ii = 2
-                    endif
-                    if(i.eq.3)then
-                        ii = 1
-                    endif
-                    
-                    f(ii, k) = f_temp2(i, k)
+                    f(reorder(i), k) = f_temp2(i, k)
                 enddo
             enddo
         enddo
 
         !plotting
-        !open(unit=2,file="phi_zrzr.out",form='formatted',status='unknown')
+        !open(unit=2,file="phi_zr.out",form='formatted',status='unknown')
         !open(unit=3,file="rho_zr.out",form='formatted',status='unknown')
         !open(unit=4,file="f_zr.out",form='formatted',status='unknown')
 
         !do i=1, nr
-            !rr=(i*dr)
-            !write(2,*)rr, phi(1, 1, i)
-            !write(3,*)rr, rho(1, i)
+        !    rr=(i*dr)
+        !    write(2,*)rr, phi(1, 1, i)
+        !    write(3,*)rr, rho(1, i)
         !enddo
         !do i=1, nrho
-            !rho1 = i*drho
-            !write(4,*)rho1, f(1, i)
+        !    rho1 = i*drho
+        !    write(4,*)rho1, f(1, i)
         !enddo
 
         !close(2)
