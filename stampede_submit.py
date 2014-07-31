@@ -15,6 +15,7 @@ def main():
             shutil.copyfile(src,dst)
             #shutil.copyfile('paramfile.in','paramfile.{0}.in'.format(jobid))
             args = "sed -i '5s/.*/{0}   !startingstep/' param_file.{1}.in".format(ss,jobid)
+            args = "sed -i '2s/.*/model_final_{0}.txt/' param_file.{0}.in".format(jobid)
         else:
             args = "sed -i '5s/.*/{0}   !startingstep/' param_file.in".format(ss)
         args = shlex.split(args)
