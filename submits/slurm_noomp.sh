@@ -28,7 +28,7 @@ echo ""
 cat param_file.in
 
 # Executable
-mpirun rmc $SLURM_JOB_ID
+mpirun rmc $SLURM_JOB_ID $@
 
 echo "Finished on:"
 date '+%s'

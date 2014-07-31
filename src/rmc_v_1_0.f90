@@ -52,7 +52,7 @@ program rmc
     real :: scale_fac, scale_fac_initial, beta
     double precision :: chi2_old, chi2_new, del_chi, chi2_gr, chi2_vk, chi2_no_energy, chi2_initial
     real :: R
-    integer :: i, j
+    integer :: i, j, step_start
     integer :: w
     integer :: nk
     integer :: ntheta, nphi, npsi
@@ -103,15 +103,16 @@ if(myid .eq. 0) then
     if (istat == 0) then
         jobID = "_"//trim(c)
     else
-        jobID = '_temp'
+        error stop "istat for jobid get_command_arg was nonzero"
+        !jobID = '_temp'
     end if
     call get_command_argument(2, c, length, istat)
-    !if (istat == 0) then
-    !    model_filename = trim(c)
-    !else
-    !    stop "istat for get_command_arg was nonzero", model_filename
-    !end if
-    !model_filename = trim(model_filename)
+    if (istat == 0) then
+        param_filename = trim(c)
+    else
+        error stop "istat for paramfile get_command_arg was nonzero"
+    end if
+    param_filename = trim(param_filename)
 
     ! Set output filenames.
     outbase = ""
@@ -140,19 +141,23 @@ endif
     !------------------- Read inputs and initialize. -----------------!
 
     ! Set input filenames.
-    param_filename = 'param_file.in'
+    !param_filename = 'param_file.in'
+    call mpi_bcast(param_filename, 256, MPI_CHARACTER, 0, mpi_comm_world, mpierr)
+    if(myid.eq.0) write(*,*) "Paramfile:", trim(param_filename)
     
     ! Start timer.
     t0 = omp_get_wtime()
 
     ! Read input model
-    call read_model(param_filename, model_filename, comment, m, istat)
+    call read_model(trim(param_filename), model_filename, comment, m, istat)
     call check_model(m, istat)
     call recenter_model(0.0, 0.0, 0.0, m)
 
     ! Read input parameters
     allocate(cutoff_r(m%nelements,m%nelements),stat=istat)
-    call read_inputs(param_filename,model_filename, eam_filename, temperature, max_move, cutoff_r, alpha, vk_exp, k, vk_exp_err, v_background, ntheta, nphi, npsi, scale_fac_initial, Q, status2)
+    call read_inputs(param_filename,model_filename, eam_filename, step_start, temperature, max_move, cutoff_r, alpha, vk_exp, k, vk_exp_err, v_background, ntheta, nphi, npsi, scale_fac_initial, Q, status2)
+    temperature = temperature*(sqrt(0.7)**(step_start/200000))
+    max_move = max_move*(sqrt(0.94)**(step_start/200000))
 
     if(myid .eq. 0) then
     write(*,*) "Model filename: ", trim(model_filename)
@@ -226,7 +231,7 @@ endif
         e2 = e1 ! eam
 #endif
 
-        i=0
+        i=step_start
         if(myid.eq.0)then
             write(*,*)
             write(*,*) "Initialization complete. Starting Monte Carlo."
@@ -235,6 +240,7 @@ endif
             write(*,*) "   Energy =     ", te1
             write(*,*) "   LSqF V(k) =  ", chi2_no_energy
             write(*,*) "   Temperature =", temperature
+            write(*,*) "   Max Move=", max_move
             write(*,*)
             ! Reset time_elapsed, energy_function, chi_squared_file
 #ifdef TIMING
@@ -256,9 +262,10 @@ endif
 
         t0 = omp_get_wtime()
         ! RMC loop begins. The loop never stops.
-        do while (i .ge. 0)
-            i=i+1
+        do while (i .lt. step_start+400000)
+#ifdef TIMING
             t2 = omp_get_wtime()
+#endif
 
             if(myid .eq. 0) write(*,*) "Starting step", i
 
@@ -453,14 +460,16 @@ endif
             endif
             endif ! myid == 0
 
-            ! Every 50,000 steps lower the temp, max_move, and reset beta.
-            if(mod(i,50000)==0)then
+            ! Every 200,000 steps lower the temp, max_move, and reset beta.
+            if(mod(i,200000)==0)then
                 temperature = temperature * sqrt(0.7)
                 if(myid.eq.0) write(*,*) "Lowering temp to", temperature, "at step", i
                 max_move = max_move * sqrt(0.94)
                 beta=1./((8.6171e-05)*temperature)
             endif
             
+            i=i+1
+
         enddo !RMC do loop
         write(*,*) "Monte Carlo Finished!"
 

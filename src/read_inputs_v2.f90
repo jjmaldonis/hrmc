@@ -7,7 +7,7 @@ module ReadInputs
 
 contains
 
-    subroutine read_inputs(param_filename, model_fn, eam_file, temperature, max_move, cutoff_r, alpha, V, k, V_err, V_background, ntheta, nphi, npsi, scale_fac, Q, status2)
+    subroutine read_inputs(param_filename, model_fn, eam_file, step_start, temperature, max_move, cutoff_r, alpha, V, k, V_err, V_background, ntheta, nphi, npsi, scale_fac, Q, status2)
 
     !param_filename=input file name containing initilizing parameters
     !temperature=beginning temperature for RMC
@@ -27,6 +27,7 @@ contains
         implicit none
         character (len=*), intent(in) :: param_filename  !Assume size array, be careful
         character (len=80), intent(out) :: model_fn, eam_file
+        integer, intent(out) :: step_start
         real, intent(out) :: temperature
         real, intent(out) :: max_move
         real, intent(out), dimension(:,:) :: cutoff_r
@@ -62,6 +63,7 @@ contains
         read(20, '(a80)') model_fn; model_fn = adjustl(model_fn)
         read(20, '(a80)') femfile; femfile= adjustl(femfile)
         read(20, '(a80)') eam_file; eam_file= adjustl(eam_file)
+        read(20, *) step_start
         read(20, *) temperature
         read(20, *) max_move
         read(20, * ) !commented line
