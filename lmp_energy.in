@@ -3,10 +3,12 @@ boundary        p p p
 
 atom_style      atomic
 
-read_data       pei/Zr54Cu38Al8_1523atoms_start.dat
+read_data       pei/Zr50Cu35Al15_start.dat
 
 pair_style      eam/alloy
-pair_coeff      * * ZrCuAl2011.eam.alloy Cu Al Zr
+pair_coeff      * * ZrCuAl2011.eam.alloy Zr Cu Al
+#pair_coeff      * * ZrCuAl2011.eam.alloy Cu Al Zr
 
 compute pot all pe
 #minimize 0 0 100 100
+#minimize 1.0e-4 1.0e-6 100 1000

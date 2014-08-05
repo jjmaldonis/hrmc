@@ -28,9 +28,12 @@ program rmc
     ! LAMMPS objects
 #ifdef USE_LMP
     type (C_ptr) :: lmp
-    real (C_double), pointer :: te1 => NULL()
-    real (C_double), pointer :: te2 => NULL()
+    !real (C_double), pointer :: te1 => NULL()
+    !real (C_double), pointer :: te2 => NULL()
     character (len=512) :: lmp_cmd_str
+    real (C_double), dimension(:,:), pointer :: xx => NULL()
+    integer (C_int), pointer :: id(:)
+    integer, dimension(:), allocatable :: types
 #endif
     !integer :: prev_moved_atom = 0, n
     ! RMC / Femsim objects
@@ -52,35 +55,41 @@ program rmc
     real :: scale_fac, scale_fac_initial, beta
     double precision :: chi2_old, chi2_new, del_chi, chi2_gr, chi2_vk, chi2_no_energy, chi2_initial
     real :: R
-    integer :: i, j
+    integer :: i, j, l, n
     integer :: w
     integer :: nk
     integer :: ntheta, nphi, npsi
     integer :: istat, status2, length
     integer :: iseed2
     real :: randnum
-#ifndef USE_LMP
     double precision :: te1, te2 ! For eam, not lammps version of energy
-#endif
     logical :: square_pixel, accepted, use_rmc, use_multislice
     integer :: ipvd, nthr
     doubleprecision :: t0, t1, t2 !timers
     real :: x! This is the parameter we will use to fit vsim to vas.
     integer, dimension(100) :: acceptance_array
     real :: avg_acceptance = 1.0
+    integer :: lammps_cores, comm_lammps, size_id, idj
 
     !------------------- Program setup. -----------------!
 
 #ifdef TIMING
-    write(*,*) "Using timing version of code!"
+    if(myid.eq.0) write(*,*) "Using timing version of code!"
 #endif
 #ifdef USE_LMP
-    write(*,*) "Using LAMMPS!"
+    if(myid.eq.0) write(*,*) "Using LAMMPS!"
 #endif
 
-    call mpi_init_thread(MPI_THREAD_MULTIPLE, ipvd, mpierr) !http://www.open-mpi.org/doc/v1.5/man3/MPI_Init_thread.3.php
+    !call mpi_init_thread(MPI_THREAD_MULTIPLE, ipvd, mpierr) !http://www.open-mpi.org/doc/v1.5/man3/MPI_Init_thread.3.php
+    call mpi_init(mpierr)
     call mpi_comm_rank(mpi_comm_world, myid, mpierr)
     call mpi_comm_size(mpi_comm_world, numprocs, mpierr)
+    !if(myid == 0) then
+    !    lammps_cores = 1
+    !else
+    !    lammps_cores = MPI_UNDEFINED
+    !endif
+    !call MPI_Comm_split(mpi_comm_world, lammps_cores, 0, comm_lammps, mpierr)
 
     !call omp_set_num_threads(2)
     nthr = omp_get_max_threads()
@@ -92,10 +101,12 @@ program rmc
     endif
 
 #ifdef USE_LMP
-    if(myid.eq.0) then
+    !if(myid.eq.0) then
         call lammps_open ('lmp -log log.simple -screen none', mpi_comm_world, lmp)
+        !call lammps_open ('lmp -log log.simple', comm_lammps, lmp)
+        !call lammps_open ('lmp -log log.simple', mpi_comm_world, lmp)
         call lammps_file (lmp, 'lmp_energy.in')
-    endif
+    !endif
 #endif
 
 if(myid .eq. 0) then
@@ -169,15 +180,14 @@ endif
     use_rmc = .TRUE.
     use_multislice = .FALSE.
 
-#ifdef USE_LMP
-    call lammps_command (lmp, 'run 0')
-    call lammps_extract_compute (te1, lmp, 'pot', 0, 0)
-#else
     call read_eam(m,eam_filename)
     call eam_initial(m,te1)
-#endif
     te1 = te1/m%natoms
-    if(myid .eq. 0) write(*,*) "Energy = ", te1
+    if(myid .eq. 0) then
+        write(*,*) ""
+        write(*,*) "Energy = ", te1
+        write(*,*) ""
+    endif
 
     call fem_initialize(m, res, k, nk, ntheta, nphi, npsi, scatfact_e, istat,  square_pixel)
     allocate(vk(size(vk_exp)), vk_as(size(vk_exp)))
@@ -222,9 +232,7 @@ endif
         chi2_initial = chi2_no_energy
         chi2_old = chi2_no_energy + te1
         !chi2_old = chi2_old * m%natoms
-#ifndef USE_LMP
         e2 = e1 ! eam
-#endif
 
         i=0
         if(myid.eq.0)then
@@ -270,6 +278,55 @@ endif
             endif
 #endif
 
+            if(chi2_no_energy < 0.01) then
+                call mpi_barrier(mpi_comm_world, mpierr)
+                call lammps_extract_atom (id, lmp, 'id')
+                if(myid.eq.0) write(*,*) "DOING CGM!", myid, size(id)
+                do j=1,m%natoms
+                    write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F, A6, I1)") "set atom ", j, " x ", m%xx%ind(j), " y ", m%yy%ind(j), " z ", m%zz%ind(j), " type ", reorder(m%znum_r%ind(j))
+                    call lammps_command(lmp, trim(lmp_cmd_str))
+                enddo
+                call mpi_barrier(mpi_comm_world, mpierr)
+                call lammps_command (lmp, 'minimize 1.0e-4 1.0e-6 100 1000')
+                call lammps_extract_atom (xx, lmp, 'x')
+                call lammps_extract_atom (id, lmp, 'id')
+                call lammps_gather_atoms (lmp, 'type', 1, types)
+                if(myid.eq.0) write(*,*) "Setting atoms after minimize"
+                call mpi_barrier(mpi_comm_world, mpierr)
+
+                do n=0, numprocs-1
+                    size_id = size(id)
+                    call mpi_barrier(mpi_comm_world, mpierr)
+                    call mpi_bcast(size_id, 1, MPI_INTEGER, n, mpi_comm_world, mpierr)
+                    do j=1, size_id
+                        if(myid .eq. n) then
+                        idj = id(j)
+                        endif
+                        call mpi_bcast(idj, 1, MPI_INTEGER, n, mpi_comm_world, mpierr)
+                        if(myid .eq. n) then
+                        m%xx%ind(idj) = xx(1,j)
+                        m%yy%ind(idj) = xx(2,j)
+                        m%zz%ind(idj) = xx(3,j)
+                        endif
+                        call mpi_bcast(m%xx%ind(idj), 1, MPI_REAL, n, mpi_comm_world, mpierr)
+                        call mpi_bcast(m%yy%ind(idj), 1, MPI_REAL, n, mpi_comm_world, mpierr)
+                        call mpi_bcast(m%zz%ind(idj), 1, MPI_REAL, n, mpi_comm_world, mpierr)
+                    enddo
+                    call mpi_barrier(mpi_comm_world, mpierr)
+                enddo
+                if(myid.eq.0) write(*,*) "Finished setting atoms after minimize"
+                call mpi_barrier(mpi_comm_world, mpierr)
+                call eam_initial(m,te2)
+                if(myid.eq.0) write(*,*) "NEW CGM ENERGY = ", te2/m%natoms
+                call fem(m, res, k, vk, vk_as, v_background, scatfact_e, mpi_comm_world, istat, square_pixel)
+                chi2_no_energy = chi_square(alpha,vk_exp, vk_exp_err, vk, scale_fac, nk)
+                chi2_old = chi2_no_energy + te2
+                e2 = e1 ! eam
+                if(myid.eq.0) write(*,*) "NEW CHI2'S= ", chi2_no_energy, chi2_old
+                call mpi_barrier(mpi_comm_world, mpierr)
+            endif
+
+
             call random_move(m,w,xx_cur,yy_cur,zz_cur,xx_new,yy_new,zz_new, max_move)
             ! check_curoffs returns false if the new atom placement is too close to
             ! another atom. Returns true if the move is okay. (hard shere cutoff)
@@ -283,14 +340,11 @@ endif
             ! Update hutches, data for chi2, and chi2/del_chi
             call hutch_move_atom(m,w,xx_new, yy_new, zz_new)
     
-#ifdef USE_LMP
-            write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", w, " x ", xx_new, " y ", yy_new, " z ", zz_new
-            call lammps_command(lmp, trim(lmp_cmd_str))
-            call lammps_command (lmp, 'run 0')
-            call lammps_extract_compute (te2, lmp, 'pot', 0, 0)
-#else
+            !write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", w, " x ", xx_new, " y ", yy_new, " z ", zz_new
+            !call lammps_command(lmp, trim(lmp_cmd_str))
+            !call lammps_command (lmp, 'run 0')
+            !call lammps_extract_compute (te2, lmp, 'pot', 0, 0)
             call eam_mc(m, w, xx_cur, yy_cur, zz_cur, xx_new, yy_new, zz_new, te2)
-#endif
             te2 = te2/m%natoms
             !if(myid .eq. 0) write(*,*) "Energy = ", te2
 
@@ -303,12 +357,9 @@ endif
                 accepted = .false.
                 call reject_position(m, w, xx_cur, yy_cur, zz_cur)
                 call hutch_move_atom(m,w,xx_cur, yy_cur, zz_cur)  !update hutches.  
-#ifndef USE_LMP
                 e2 = e1 ! eam
-#else
-                write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", w, " x ", xx_cur, " y ", yy_cur, " z ", zz_cur
-                call lammps_command(lmp, trim(lmp_cmd_str))
-#endif
+                !write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", w, " x ", xx_cur, " y ", yy_cur, " z ", zz_cur
+                !call lammps_command(lmp, trim(lmp_cmd_str))
                 if(myid.eq.0) write(*,*) "MC move rejected solely due to energy."
             endif
             endif
@@ -325,7 +376,6 @@ endif
 
             chi2_no_energy = chi_square(alpha, vk_exp, vk_exp_err, vk, scale_fac, nk)
 
-
             chi2_new = chi2_no_energy + te2
             !chi2_new = chi2_new * m%natoms
             del_chi = chi2_new - chi2_old
@@ -341,9 +391,7 @@ endif
             if(del_chi <0.0)then
                 ! Accept the move
                 call fem_accept_move(mpi_comm_world)
-#ifndef USE_LMP
                 e1 = e2 ! eam
-#endif
                 chi2_old = chi2_new
                 accepted = .true.
                 if(myid.eq.0) write(*,*) "MC move accepted outright."
@@ -353,9 +401,7 @@ endif
                 if(log(1.-randnum)<-del_chi*beta)then
                     ! Accept move
                     call fem_accept_move(mpi_comm_world)
-#ifndef USE_LMP
                     e1 = e2 ! eam
-#endif
                     chi2_old = chi2_new
                     accepted = .true.
                     if(myid.eq.0) write(*,*) "MC move accepted due to probability. del_chi*beta = ", del_chi*beta
@@ -364,12 +410,9 @@ endif
                     call reject_position(m, w, xx_cur, yy_cur, zz_cur)
                     call hutch_move_atom(m,w,xx_cur, yy_cur, zz_cur)  !update hutches.
                     call fem_reject_move(m, w, xx_cur, yy_cur, zz_cur, mpi_comm_world)
-#ifndef USE_LMP
                     e2 = e1 ! eam
-#else
-                    write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", w, " x ", xx_cur, " y ", yy_cur, " z ", zz_cur
-                    call lammps_command(lmp, trim(lmp_cmd_str))
-#endif
+                    !write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", w, " x ", xx_cur, " y ", yy_cur, " z ", zz_cur
+                    !call lammps_command(lmp, trim(lmp_cmd_str))
                     accepted = .false.
                     if(myid.eq.0) write(*,*) "MC move rejected."
                 endif
@@ -496,9 +539,7 @@ endif
     endif ! Use RMC
 
 #ifdef USE_LMP
-    if(myid.eq.0) then
     call lammps_close (lmp)
-    endif
 #endif
     call mpi_finalize(mpierr)
 

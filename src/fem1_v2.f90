@@ -505,7 +505,15 @@ contains
         sum_int_as_sq = 0.0
 
         ! initialize the rotated models
-        ! Also allocate room for mcopy - Jason 20130731
+        if(associated(mrot)) then
+            do i=myid+1, nrot, numprocs
+                deallocate(mrot(i)%xx%ind, mrot(i)%yy%ind, mrot(i)%zz%ind, mrot(i)%znum%ind, mrot(i)%atom_type, mrot(i)%znum_r%ind, mrot(i)%composition, stat=istat)
+                do j=1,size(mrot(i)%rot_i)
+                    if(allocated(mrot(i)%rot_i(j)%ind)) deallocate(mrot(i)%rot_i(j)%ind)
+                enddo
+            enddo
+            deallocate(mrot)
+        endif
         allocate(mrot(nrot), stat=istat)
         call check_allocation(istat, 'Cannot allocate rotated model array.')
 
@@ -517,7 +525,7 @@ contains
             mrot(i)%id = i
         enddo
 
-        allocate(old_index(nrot), old_pos(nrot), stat=istat)
+        if(.not. associated(old_index)) allocate(old_index(nrot), old_pos(nrot), stat=istat)
         call check_allocation(istat, 'Cannot allocate memory for old indices and positions in fem_initialize.')
         ! Initialize old_index and old_pos arrays. The if statements should
         ! be unnecessary, but they don't hurt. Better safe than sorry.
@@ -1227,6 +1235,10 @@ contains
         endif
 
         deallocate(moved_atom%xx%ind, moved_atom%yy%ind, moved_atom%zz%ind, moved_atom%znum%ind, moved_atom%atom_type, moved_atom%znum_r%ind, moved_atom%composition, stat=istat)
+        do i=1,size(moved_atom%rot_i)
+            if(allocated(moved_atom%rot_i(i)%ind)) deallocate(moved_atom%rot_i(i)%ind)
+        enddo
+        !deallocate(moved_atom)
         !call destroy_model(moved_atom) ! Memory leak?
         deallocate(psum_int, psum_int_sq, sum_int, sum_int_sq)
         !write(*,*) "I am core", myid, "and I am done with fem_update."

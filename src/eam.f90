@@ -13,6 +13,7 @@ module eam_mod
     real :: drho, dr, eam_max_r
     logical, dimension(:), pointer :: not_counted
     integer :: nrho,  nr, nelements
+    integer, dimension(:), allocatable :: reorder
                                   
 contains
 
@@ -33,7 +34,6 @@ contains
         real, dimension(:,:), allocatable  :: f_temp2
         real, dimension(:,:), allocatable  :: rho_temp2
         real, dimension(:,:,:), allocatable :: phi_temp2
-        integer, dimension(:), allocatable :: reorder
         integer, dimension(:), allocatable :: atomic_numbers
         character (len=2), dimension(:), allocatable :: atom_syms
         character (len=2), dimension(103) :: all_atom_syms

@@ -25,3 +25,4 @@ src/*.o
 src/*.mod
 rmc
 temp*
+lammps_src/

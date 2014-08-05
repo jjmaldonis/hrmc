@@ -281,6 +281,7 @@ contains
                 end if
             end do
         end do
+        if(myid.eq.0) write(*,*) "Order of elements for znum_r:", m%atom_type
 
         ! For each atom i, add a parameter znum_r(i) that corresponds to
         ! m%atom_type and m%composition for fast lookup.
