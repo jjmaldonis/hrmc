@@ -29,9 +29,9 @@ module fem_mod
         real :: dr ! Distance between pixels. Note, therefore, that there is half this distance between the pixels and the world edge. This is NOT the distance between the pixel centers. This is the distance between the edges of two different pixels. dr + phys_diam is the distance between the pixel centers!
     end type pix_array
     real, save, dimension(:,:), allocatable :: rot ! nrot x 3 list of (phi, psi, theta) rotation angles
-    real, save, dimension(:,:,:), allocatable :: int_i, int_sq, int_i_as, int_as_sq  ! nk x npix x nrot.  int_sq == int_i**2. int_i_as is for autoslice
-    real, save, dimension(:,:,:), allocatable :: old_int, old_int_sq
-    real, save, dimension(:), allocatable :: int_sum, int_sq_sum  ! nk long sums of int and int_sq arrays for calculating V(k)
+    double precision, save, dimension(:,:,:), allocatable :: int_i, int_sq, int_i_as, int_as_sq  ! nk x npix x nrot.  int_sq == int_i**2. int_i_as is for autoslice
+    double precision, save, dimension(:,:,:), allocatable :: old_int, old_int_sq
+    double precision, save, dimension(:), allocatable :: int_sum, int_sq_sum  ! nk long sums of int and int_sq arrays for calculating V(k)
     real, save, allocatable, dimension(:) :: j0, A1                                               
     type(model), save, dimension(:), pointer, public :: mrot  ! array of rotated models
     type(model), save, dimension(:), pointer :: mcopy  ! array of rotated models
@@ -468,8 +468,8 @@ contains
         integer, intent(out) :: istat
         logical, optional, intent(in) :: square_pixel
         integer, optional, intent(in) :: rot_begin, rot_end
-        real, dimension(:), allocatable :: psum_int, psum_int_sq, sum_int, sum_int_sq  !mpi
-        real, dimension(:), allocatable :: psum_int_as, psum_int_as_sq, sum_int_as, sum_int_as_sq  !mpi
+        double precision, dimension(:), allocatable :: psum_int, psum_int_sq, sum_int, sum_int_sq  !mpi
+        double precision, dimension(:), allocatable :: psum_int_as, psum_int_as_sq, sum_int_as, sum_int_as_sq  !mpi
         integer :: comm
         integer :: i, j
         integer begin_rot, end_rot
@@ -548,8 +548,8 @@ contains
         enddo
 
         call mpi_barrier(comm, mpierr)
-        call mpi_reduce (psum_int, sum_int, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
-        call mpi_reduce (psum_int_sq, sum_int_sq, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
+        call mpi_reduce (psum_int, sum_int, size(k), mpi_double, mpi_sum, 0, comm, mpierr)
+        call mpi_reduce (psum_int_sq, sum_int_sq, size(k), mpi_double, mpi_sum, 0, comm, mpierr)
         if(use_autoslice) call mpi_reduce (psum_int_as, sum_int_as, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
         if(use_autoslice) call mpi_reduce (psum_int_as_sq, sum_int_as_sq, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
 
@@ -584,7 +584,7 @@ contains
         type(model), intent(inout) :: m_int
         real, intent(in) :: res, px, py
         real, dimension(nk), intent(in) :: k
-        real, dimension(nk), intent(out) :: int_i, int_i_as
+        double precision, dimension(nk), intent(out) :: int_i, int_i_as
         real, dimension(:,:), pointer :: scatfact_e
         integer, intent(out) :: istat
         logical, intent(in) :: square_pixel
@@ -1208,6 +1208,12 @@ contains
 
         call mpi_barrier(comm, mpierr)
         call mpi_reduce (psum_int, sum_int, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
+        !do i=1,numprocs
+        !    if(myid == i) then
+        !        write(*,*) "Core",myid,"Intensity:", psum_int
+        !    endif
+        !    call sleep(1)
+        !enddo
         call mpi_reduce (psum_int_sq, sum_int_sq, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
         if(use_autoslice) call mpi_reduce (psum_int_as, sum_int_as, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
         if(use_autoslice) call mpi_reduce (psum_int_as_sq, sum_int_as_sq, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
