@@ -550,8 +550,8 @@ contains
         call mpi_barrier(comm, mpierr)
         call mpi_reduce (psum_int, sum_int, size(k), mpi_double, mpi_sum, 0, comm, mpierr)
         call mpi_reduce (psum_int_sq, sum_int_sq, size(k), mpi_double, mpi_sum, 0, comm, mpierr)
-        if(use_autoslice) call mpi_reduce (psum_int_as, sum_int_as, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
-        if(use_autoslice) call mpi_reduce (psum_int_as_sq, sum_int_as_sq, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
+        if(use_autoslice) call mpi_reduce (psum_int_as, sum_int_as, size(k), mpi_double, mpi_sum, 0, comm, mpierr)
+        if(use_autoslice) call mpi_reduce (psum_int_as_sq, sum_int_as_sq, size(k), mpi_double, mpi_sum, 0, comm, mpierr)
 
         if(myid.eq.0)then
             do i=1, nk
@@ -978,8 +978,8 @@ contains
         integer, intent(out) :: istat
         logical, intent(in) :: square_pixel
         logical, intent(in) :: use_autoslice
-        real, dimension(:), allocatable :: psum_int, psum_int_sq, sum_int, sum_int_sq !mpi
-        real, dimension(:), allocatable :: psum_int_as, psum_int_as_sq, sum_int_as, sum_int_as_sq !mpi autoslice
+        double precision, dimension(:), allocatable :: psum_int, psum_int_sq, sum_int, sum_int_sq !mpi
+        double precision, dimension(:), allocatable :: psum_int_as, psum_int_as_sq, sum_int_as, sum_int_as_sq !mpi autoslice
         integer :: comm
         type(model) :: moved_atom, rot_atom
         integer :: i, j, m, n, ntpix
@@ -1207,16 +1207,16 @@ contains
         ! somewhat off.
 
         call mpi_barrier(comm, mpierr)
-        call mpi_reduce (psum_int, sum_int, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
+        call mpi_reduce (psum_int, sum_int, size(k), mpi_double, mpi_sum, 0, comm, mpierr)
         !do i=1,numprocs
         !    if(myid == i) then
         !        write(*,*) "Core",myid,"Intensity:", psum_int
         !    endif
         !    call sleep(1)
         !enddo
-        call mpi_reduce (psum_int_sq, sum_int_sq, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
-        if(use_autoslice) call mpi_reduce (psum_int_as, sum_int_as, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
-        if(use_autoslice) call mpi_reduce (psum_int_as_sq, sum_int_as_sq, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
+        call mpi_reduce (psum_int_sq, sum_int_sq, size(k), mpi_double, mpi_sum, 0, comm, mpierr)
+        if(use_autoslice) call mpi_reduce (psum_int_as, sum_int_as, size(k), mpi_double, mpi_sum, 0, comm, mpierr)
+        if(use_autoslice) call mpi_reduce (psum_int_as_sq, sum_int_as_sq, size(k), mpi_double, mpi_sum, 0, comm, mpierr)
         !write(*,*) "I am core", myid, "and I am past mpi_reduce."
 
         ! Recalculate the variance
