@@ -79,48 +79,48 @@ contains
         num_line = 0
         filenamelength=len_trim(femfile)
         file_end=.false.
-        open(30,file=femfile(1:filenamelength),iostat=status1,status='old') 
-        if(status1 .eq. 0) then !open succeeds
-            read(30, '(a80)') comment1 !first line is comment
-            ! Count how many data pairs are in the file. -1 denotes EOF
-            do while( .not. file_end)
-                read(30, *) indicator_end
-                if(abs(indicator_end+1.0) .le. 1e-6) then !file end is reached
-                    exit !exit this loop
-                else
-                    num_line = num_line + 1
-                endif
-            enddo
-            rewind(30) !go to the beginning of the file
-            read(30, '(a80)') comment1
-            allocate(tempdata(4*num_line),stat=stat_allocate1)
-            !read k ,v, and v_err data
-            !read k first, then v, last v_err
-            if(stat_allocate1 .eq. 0) then
-                read(30, *) tempdata
-                allocate(k(num_line), stat=stat_allocate2)
-                allocate(v(num_line), stat=stat_allocate3)
-                allocate(v_err(num_line), stat=stat_allocate4)
-                allocate(v_background(num_line))
+        !open(30,file=femfile(1:filenamelength),iostat=status1,status='old') 
+        !if(status1 .eq. 0) then !open succeeds
+        !    read(30, '(a80)') comment1 !first line is comment
+        !    ! Count how many data pairs are in the file. -1 denotes EOF
+        !    do while( .not. file_end)
+        !        read(30, *) indicator_end
+        !        if(abs(indicator_end+1.0) .le. 1e-6) then !file end is reached
+        !            exit !exit this loop
+        !        else
+        !            num_line = num_line + 1
+        !        endif
+        !    enddo
+        !    rewind(30) !go to the beginning of the file
+        !    read(30, '(a80)') comment1
+        !    allocate(tempdata(4*num_line),stat=stat_allocate1)
+        !    !read k ,v, and v_err data
+        !    !read k first, then v, last v_err
+        !    if(stat_allocate1 .eq. 0) then
+        !        read(30, *) tempdata
+        !        allocate(k(num_line), stat=stat_allocate2)
+        !        allocate(v(num_line), stat=stat_allocate3)
+        !        allocate(v_err(num_line), stat=stat_allocate4)
+        !        allocate(v_background(num_line))
 
-                if ((stat_allocate2 .eq. 0) .and. (stat_allocate3 .eq. 0) .and. (stat_allocate4 .eq. 0)) then
-                    k=tempdata(1:4*num_line:4)
-                    v=tempdata(2:4*num_line:4)
-                    v_err=tempdata(3:4*num_line:4)
-                    v_background=tempdata(4:4*num_line:4)
-                else
-                    print *, 'fem part 2 or 3, or 4 fails!'
-                    return
-                endif !allocate2, 3 and 4
-            else
-                print *, 'fem part allocation fail'
-                return
-            endif
-        deallocate(tempdata)
-        else
-            print *, 'open fem file fails', femfile(1:filenamelength)
-        endif
-        close(30)
+        !        if ((stat_allocate2 .eq. 0) .and. (stat_allocate3 .eq. 0) .and. (stat_allocate4 .eq. 0)) then
+        !            k=tempdata(1:4*num_line:4)
+        !            v=tempdata(2:4*num_line:4)
+        !            v_err=tempdata(3:4*num_line:4)
+        !            v_background=tempdata(4:4*num_line:4)
+        !        else
+        !            print *, 'fem part 2 or 3, or 4 fails!'
+        !            return
+        !        endif !allocate2, 3 and 4
+        !    else
+        !        print *, 'fem part allocation fail'
+        !        return
+        !    endif
+        !deallocate(tempdata)
+        !else
+        !    print *, 'open fem file fails', femfile(1:filenamelength)
+        !endif
+        !close(30)
         close(20)
     end subroutine read_inputs
 

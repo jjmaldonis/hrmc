@@ -450,7 +450,7 @@ program main
     call read_eam(m,eam_filename)
     call eam_initial(m,te1)
     te1 = te1/m%natoms
-    write(*,*) "Total energy = ", te1
+    write(*,*) "Avg energy per atom = ", te1
     do i=1, m%natoms
         write(*,*) i, e1(i)
     enddo
