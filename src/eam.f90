@@ -414,3 +414,44 @@ contains
     end subroutine eam_mc
 
 end module eam_mod
+
+program main
+    use rmc_global
+    use readinputs
+    use model_mod
+    use eam_mod
+    implicit none
+    type(model) :: m
+    character (len=256) :: model_filename
+    character (len=256) :: param_filename
+    character (len=256) :: eam_filename
+    character (len=512) :: comment
+    character (len=256) :: jobID, c, step_str
+    double precision :: te1
+    integer :: istat, length, i, step_start, ntheta, nphi, npsi
+    real :: temperature, max_move, Q, res, alpha, scale_fac_initial
+    real, pointer, dimension(:) :: k
+    double precision, pointer, dimension(:) :: vk, vk_exp, vk_exp_err, v_background, vk_as
+    real, pointer, dimension(:,:) :: cutoff_r 
+    call get_command_argument(1, c, length, istat)
+    if (istat == 0) then
+        param_filename = trim(c)
+    else
+        error stop "istat for paramfile get_command_arg was nonzero"
+    endif
+    param_filename = trim(param_filename)
+
+    call read_model(trim(param_filename), model_filename, comment, m, istat)
+    call check_model(m, istat)
+    call recenter_model(0.0, 0.0, 0.0, m)
+    allocate(cutoff_r(m%nelements,m%nelements),stat=istat)
+    call read_inputs(param_filename,model_filename, eam_filename, step_start, temperature, max_move, cutoff_r, alpha, vk_exp, k, vk_exp_err, v_background, ntheta, nphi, npsi, scale_fac_initial, Q, istat)
+    write(*,*) "Model filename: ", trim(model_filename)
+    call read_eam(m,eam_filename)
+    call eam_initial(m,te1)
+    te1 = te1/m%natoms
+    write(*,*) "Total energy = ", te1
+    do i=1, m%natoms
+        write(*,*) i, e1(i)
+    enddo
+end program main
