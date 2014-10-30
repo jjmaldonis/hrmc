@@ -462,8 +462,8 @@ contains
         type(model), intent(in) :: m
         real, intent(in) :: res
         real, dimension(:), intent(in) :: k
-        real, dimension(:), INTENT(OUT) :: Vk, vk_as
-        real, dimension(:), intent(in) :: v_background
+        double precision, dimension(:), INTENT(OUT) :: Vk, vk_as
+        double precision, dimension(:), intent(in) :: v_background
         real, dimension(:,:), pointer :: scatfact_e
         integer, intent(out) :: istat
         logical, optional, intent(in) :: square_pixel
@@ -972,8 +972,9 @@ contains
         type(model), intent(in) :: m_in
         integer, intent(in) :: atom
         real, intent(in) :: res
-        real, dimension(:), intent(in) :: k, v_background
-        real, dimension(:), intent(out) :: vk, vk_as
+        real, dimension(:), intent(in) :: k
+        double precision, dimension(:), intent(in) :: v_background
+        double precision, dimension(:), intent(out) :: vk, vk_as
         real, dimension(:,:), pointer :: scatfact_e
         integer, intent(out) :: istat
         logical, intent(in) :: square_pixel

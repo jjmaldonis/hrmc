@@ -32,7 +32,8 @@ contains
         real, intent(out) :: max_move
         real, intent(out), dimension(:,:) :: cutoff_r
         real, intent(out) :: alpha
-        real, pointer, dimension(:) :: v, k, v_err, v_background
+        real, pointer, dimension(:) :: k
+        double precision, pointer, dimension(:) :: v, v_err, v_background
         integer, intent(out) :: ntheta, nphi, npsi
         real, intent(out) :: q
         real, intent(out) :: scale_fac

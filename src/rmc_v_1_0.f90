@@ -45,7 +45,8 @@ program rmc
     real :: temperature
     real :: max_move
     real :: Q, res, alpha
-    real, pointer, dimension(:) :: vk, vk_exp, k, vk_exp_err, v_background, vk_as !vk_as is for autoslice/multislice (whatever it's called)
+    real, pointer, dimension(:) :: k
+    double precision, pointer, dimension(:) :: vk, vk_exp, vk_exp_err, v_background, vk_as !vk_as is for autoslice/multislice (whatever it's called)
     real, pointer, dimension(:,:) :: cutoff_r 
     real, pointer, dimension(:,:) :: scatfact_e
     real :: xx_cur, yy_cur, zz_cur, xx_new, yy_new, zz_new

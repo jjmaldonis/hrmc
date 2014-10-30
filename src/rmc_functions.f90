@@ -29,8 +29,8 @@ CONTAINS
         !V_err=FEM measurement variance error
         !V_sim=simulated V(k) for variance data
         real :: alpha
-        real, pointer, dimension(:) :: vk_exp, vk_exp_err
-        real, pointer, dimension(:) :: vk
+        double precision, pointer, dimension(:) :: vk_exp, vk_exp_err
+        double precision, pointer, dimension(:) :: vk
         real, intent(in) :: scale_fac
         integer, intent(in) ::nk
         integer i, j
@@ -64,7 +64,7 @@ CONTAINS
         real, intent(in) :: sf_initial
         ! vsim is the simulated vk as computed by the fast intensity algorithm. 
         ! vas is the simulated vk as computed by autoslice.
-        real, intent(in), pointer, dimension(:) :: vsim, vas 
+        double precision, intent(in), pointer, dimension(:) :: vsim, vas 
         real :: x! This is the parameter we will use to fit vsim to vas.
         integer :: i
 
