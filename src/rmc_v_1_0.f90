@@ -462,7 +462,7 @@ endif
             endif ! myid == 0
 
             ! Every 200,000 steps lower the temp, max_move, and reset beta.
-            if(mod(i,200000)==0)then
+            if(mod(i,200000)==0 .and. i .ne. 0)then
                 temperature = temperature * sqrt(0.7)
                 if(myid.eq.0) write(*,*) "Lowering temp to", temperature, "at step", i
                 max_move = max_move * sqrt(0.94)

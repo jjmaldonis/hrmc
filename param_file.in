@@ -2,7 +2,7 @@
 pei/Zr50Cu35Al15_10k_start.xyz
 pei/fem_exp_Zr54Cu38Al8_t3.txt
 ZrCuAl2011.eam.alloy
-0
+0   !startingstep
 50.0    !starting temperature (assuming starting step is 1, not what you set it at)
 1.5    !maximum move distance
 #cut off: nxn matrix 11 21 31/ 12 22 32/ 13 23 33/  (1 is the lowest atom# species) 
