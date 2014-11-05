@@ -1,0 +1,14 @@
+#parameter file opened. set a filename to # to ignore it
+pei/ni60nb40_start.xyz
+pei/fem_exp_Zr54Cu38Al8_t3.txt
+NiNb.lammps.eam
+0   !startingstep
+100.0    !starting temperature (assuming starting step is 1, not what you set it at)
+1.5    !maximum move distance
+#cut off: nxn matrix 11 21 31/ 12 22 32/ 13 23 33/  (1 is the lowest atom# species) 
+2.219 2.219
+2.219 2.219
+0.0	 !weight of fem; alpha
+32.8805  !scaling factor for exp Vk; beta
+1 40 20 	 !# of rotations(nphi, npsi, ntheta) 1 40 20
+0.0305 !Q (inverse angstrom)

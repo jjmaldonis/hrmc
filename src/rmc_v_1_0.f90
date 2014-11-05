@@ -6,9 +6,24 @@
 ! diffraction data and against fluctuation electron
 ! microscopy V(k) data.
 !
-! Voyles research group: Jason Maldonis, Jinwoo Hwang, Feng, Yi, and
+! Voyles research group: Jinwoo Hwang, Feng, Yi, and
 ! Paul Voyles, begun 12/16/08
 ! 
+! merged with version of fy, 12/20/08, pmv
+! more program flow added 12/20/08 pmv
+! add new variable: electron scattering coefficients for calculating
+! which are a_e, b_e, c_e and d_e
+! add new module scattering_factors, add USE without :: following them for
+! visual fortran debug by fy on 12/23
+! need to not define gr_sim etc. arrays
+! Re-written by Jinwoo Hwang - 03/20/2009
+! Hard sphere cutoff applied.
+! Debugged and tested by Jinwoo Hwang - 03/25/2009
+! Vk allocated before initial Vk - JWH 04/02/2009
+! hutch_move_atom added in reject part - JWH 04/15/2009.
+! gr_e_err is added - jwh 04/25/2009
+! See commit history for changes by jjm on Github: (check all branches)
+!   https://github.com/refreshx2/OdieCode/tree/master/060911_rmc_eam_gr_vk_t4
 
 program rmc
 
@@ -23,6 +38,7 @@ program rmc
     use fem_mod
     use rmc_functions
     use eam_mod
+    use mutations
     implicit none
     include 'mpif.h'
     ! LAMMPS objects
@@ -31,44 +47,56 @@ program rmc
     real (C_double), pointer :: te1 => NULL()
     real (C_double), pointer :: te2 => NULL()
     character (len=512) :: lmp_cmd_str
+    real (C_double), dimension(:,:), pointer :: x => NULL()
+    integer (C_int), pointer :: types(:)
+    integer (C_int), pointer :: id(:)
 #endif
-    !integer :: prev_moved_atom = 0, n
     ! RMC / Femsim objects
-    type(model) :: m
+    type(model) :: m, mold
     character (len=256) :: model_filename
-    character (len=256) :: param_filename
-    character (len=256) :: eam_filename
+    character (len=256) :: param_filename  
     character (len=256) :: outbase
     character (len=256) :: jobID, c, step_str
     character (len=512) :: comment
-    character (len=256) :: time_elapsed, vki_fn, vku_fn, vkf_fn, output_model_fn, energy_fn, final_model_fn, chi_squared_file, acceptance_rate_fn, beta_fn
+    character (len=256) :: time_elapsed, vki_fn, vku_fn, vkf_fn, output_model_fn, energy_fn, final_model_fn, gri_fn, chi_squared_file, acceptance_rate_fn, beta_fn
+    logical, dimension(4) :: used_data_sets
     real :: temperature
     real :: max_move
-    real :: Q, res, alpha
-    real, pointer, dimension(:) :: k
-    double precision, pointer, dimension(:) :: vk, vk_exp, vk_exp_err, v_background, vk_as !vk_as is for autoslice/multislice (whatever it's called)
+    real :: Q, res
+    real :: pixel_distance
+    real, dimension(4) :: weights
+    real, pointer, dimension(:) :: gr_e,r_e,gr_e_err
+    real, pointer, dimension(:) :: gr_n,r_n
+    real, pointer, dimension(:) :: gr_x,r_x
+    real, pointer, dimension(:) :: vk, vk_exp, k, vk_exp_err, v_background, vk_as !vk_as is for autoslice/multislice (whatever it's called)
     real, pointer, dimension(:,:) :: cutoff_r 
     real, pointer, dimension(:,:) :: scatfact_e
     real :: xx_cur, yy_cur, zz_cur, xx_new, yy_new, zz_new
-    real :: scale_fac, scale_fac_initial, beta
-    double precision :: chi2_old, chi2_new, del_chi, chi2_gr, chi2_vk, chi2_no_energy, chi2_initial
+    real :: chi2_old, chi2_new, scale_fac, scale_fac_initial, del_chi, beta, chi2_gr, chi2_vk, chi2_no_energy
+    real :: rmin_e, rmax_e
+    real :: rmin_n, rmax_n
+    real :: rmin_x, rmax_x
     real :: R
-    integer :: i, j, step_start
+    integer :: i, j
     integer :: w
     integer :: nk
     integer :: ntheta, nphi, npsi
+    integer :: fem_algorithm
     integer :: istat, status2, length
+    integer :: total_steps
     integer :: iseed2
     real :: randnum
 #ifndef USE_LMP
-    double precision :: te1, te2 ! For eam, not lammps version of energy
+    real :: te1, te2 ! For eam, not lammps version of energy
 #endif
     logical :: square_pixel, accepted, use_rmc, use_multislice
     integer :: ipvd, nthr
     doubleprecision :: t0, t1, t2 !timers
-    real :: x! This is the parameter we will use to fit vsim to vas.
-    integer, dimension(100) :: acceptance_array
+    !real :: x! This is the parameter we will use to fit vsim to vas.
+    integer, dimension(1000) :: acceptance_array
     real :: avg_acceptance = 1.0
+    integer :: atom1,atom2, cnatoms1, cnatoms2, temp
+    integer, dimension(:), pointer :: cluster1, cluster2
 
     !------------------- Program setup. -----------------!
 
@@ -83,7 +111,6 @@ program rmc
     call mpi_comm_rank(mpi_comm_world, myid, mpierr)
     call mpi_comm_size(mpi_comm_world, numprocs, mpierr)
 
-    !call omp_set_num_threads(2)
     nthr = omp_get_max_threads()
     if(myid.eq.0)then
         write(*,*)
@@ -95,6 +122,7 @@ program rmc
 #ifdef USE_LMP
     if(myid.eq.0) then
         call lammps_open ('lmp -log log.simple -screen none', mpi_comm_world, lmp)
+        !call lammps_open ('lmp -log log.simple', mpi_comm_world, lmp)
         call lammps_file (lmp, 'lmp_energy.in')
     endif
 #endif
@@ -104,16 +132,15 @@ if(myid .eq. 0) then
     if (istat == 0) then
         jobID = "_"//trim(c)
     else
-        error stop "istat for jobid get_command_arg was nonzero"
-        !jobID = '_temp'
+        jobID = '_temp'
     end if
-    call get_command_argument(2, c, length, istat)
-    if (istat == 0) then
-        param_filename = trim(c)
-    else
-        error stop "istat for paramfile get_command_arg was nonzero"
-    end if
-    param_filename = trim(param_filename)
+    !call get_command_argument(2, c, length, istat)
+    !if (istat == 0) then
+    !    model_filename = trim(c)
+    !else
+    !    stop "istat for get_command_arg was nonzero", model_filename
+    !end if
+    !model_filename = trim(model_filename)
 
     ! Set output filenames.
     outbase = ""
@@ -131,6 +158,8 @@ if(myid .eq. 0) then
     final_model_fn = trim(trim(final_model_fn)//jobID)//".txt"
     write(energy_fn, "(A6)") "energy"
     energy_fn = trim(trim(energy_fn)//jobID)//".txt"
+    write(gri_fn, "(A10)") "gr_initial"
+    gri_fn = trim(trim(gri_fn)//jobID)//".txt"
     write(chi_squared_file, "(A11)") "chi_squared"
     chi_squared_file = trim(trim(chi_squared_file)//jobID)//".txt"
     write(acceptance_rate_fn, "(A15)") "acceptance_rate"
@@ -142,23 +171,24 @@ endif
     !------------------- Read inputs and initialize. -----------------!
 
     ! Set input filenames.
-    !param_filename = 'param_file.in'
-    call mpi_bcast(param_filename, 256, MPI_CHARACTER, 0, mpi_comm_world, mpierr)
-    if(myid.eq.0) write(*,*) "Paramfile:", trim(param_filename)
+    param_filename = 'param_file.in'
+    !call execute_command_line("cat param_file.in")
     
     ! Start timer.
     t0 = omp_get_wtime()
 
     ! Read input model
-    call read_model(trim(param_filename), model_filename, comment, m, istat)
+    call read_model(param_filename, model_filename, comment, m, istat)
     call check_model(m, istat)
     call recenter_model(0.0, 0.0, 0.0, m)
 
     ! Read input parameters
     allocate(cutoff_r(m%nelements,m%nelements),stat=istat)
-    call read_inputs(param_filename,model_filename, eam_filename, step_start, temperature, max_move, cutoff_r, alpha, vk_exp, k, vk_exp_err, v_background, ntheta, nphi, npsi, scale_fac_initial, Q, status2)
-    temperature = temperature*(sqrt(0.7)**(step_start/200000))
-    max_move = max_move*(sqrt(0.94)**(step_start/200000))
+    call read_inputs(param_filename,model_filename,temperature, max_move, cutoff_r, &
+        used_data_sets, weights, gr_e, r_e, gr_e_err, gr_n, r_n, gr_x, &
+        r_x, vk_exp, k, vk_exp_err, v_background, ntheta, nphi, npsi, &
+        scale_fac_initial, Q, fem_algorithm, pixel_distance, total_steps, &
+        rmin_e, rmax_e, rmin_n, rmax_n, rmin_x, rmax_x, status2)
 
     if(myid .eq. 0) then
     write(*,*) "Model filename: ", trim(model_filename)
@@ -179,94 +209,50 @@ endif
     call lammps_command (lmp, 'run 0')
     call lammps_extract_compute (te1, lmp, 'pot', 0, 0)
 #else
-    call read_eam(m,eam_filename)
+    call read_eam(m)
     call eam_initial(m,te1)
 #endif
-    te1 = te1/m%natoms
     if(myid .eq. 0) write(*,*) "Energy = ", te1
-
-    call fem_initialize(m, res, k, nk, ntheta, nphi, npsi, scatfact_e, istat,  square_pixel)
-    allocate(vk(size(vk_exp)), vk_as(size(vk_exp)))
-    vk = 0.0; vk_as = 0.0
-
-    ! Print warning message if we are using too many cores.
-    if(myid.eq.0) then
-        call print_sampled_map(m, res, square_pixel)
-        if(pa%npix /= 1) then
-            if(numprocs > 3*nrot) write(*,*) "WARNING: You are using too many cores!"
-        else
-            if(numprocs > nrot) write(*,*) "WARNING: You are using too many cores!"
-        endif
-    endif
-
-    !------------------- Call femsim. -----------------!
-
-    ! Fem updates vk based on the intensity calculations and v_background.
-    call fem(m, res, k, vk, vk_as, v_background, scatfact_e, mpi_comm_world, istat, square_pixel)
-
-    t1 = omp_get_wtime()
-    if(myid.eq.0)then
-        write(*,*) "Femsim took", t1-t0, "seconds on processor", myid
-
-        ! Write initial vk 
-        open(unit=52,file=trim(vki_fn),form='formatted',status='unknown')
-            do i=1, nk
-                write(52,*) k(i),vk(i)
-            enddo
-        close(52)
-    endif
-
-    !------------------- Start RMC. -----------------!
 
     call mpi_barrier(mpi_comm_world, mpierr)
 
     if(use_rmc) then ! End here if we only want femsim. Set the variable above.
 
-        ! Calculate initial chi2
-        chi2_no_energy = chi_square(alpha,vk_exp, vk_exp_err, vk, scale_fac, nk)
-
-        chi2_initial = chi2_no_energy
-        chi2_old = chi2_no_energy + te1
-        !chi2_old = chi2_old * m%natoms
+        chi2_old = te1
 #ifndef USE_LMP
         e2 = e1 ! eam
 #endif
 
-        i=step_start
+        i=0
         if(myid.eq.0)then
             write(*,*)
             write(*,*) "Initialization complete. Starting Monte Carlo."
             write(*,*) "Initial Conditions:"
-            write(*,*) "   Step =       ", i
+            write(*,*) "   Step =      ", i
             write(*,*) "   Energy =     ", te1
-            write(*,*) "   LSqF V(k) =  ", chi2_no_energy
             write(*,*) "   Temperature =", temperature
-            write(*,*) "   Max Move=", max_move
             write(*,*)
             ! Reset time_elapsed, energy_function, chi_squared_file
-#ifdef TIMING
             open(35,file=trim(time_elapsed),form='formatted',status='unknown')
                 t1 = omp_get_wtime()
                 write(35,*) numprocs, "processors are being used."
                 write(35,*) "Step, Time elapsed, Avg time per step, This step's time"
             close(35)
-#endif
             open(36,file=trim(chi_squared_file),form='formatted',status='unknown')
-                write(36,*) "step, chi2, energy"
-                write(36,*) i, chi2_no_energy, te1
+                write(36,*) "step, energy"
+                write(36,*) i, te1
             close(36)
             open(37,file=trim(acceptance_rate_fn),form='formatted',status='unknown',access='append')
                 write(37,*) "step, acceptance rate averaged over last 1000 steps"
             close(37)
         endif
 
-
+        call copy_model(m,mold)
         t0 = omp_get_wtime()
         ! RMC loop begins. The loop never stops.
-        do while (i .lt. step_start+400000)
-#ifdef TIMING
+        do while (i .ge. 0)
+            i=i+1
             t2 = omp_get_wtime()
-#endif
 
             if(myid .eq. 0) write(*,*) "Starting step", i
 
@@ -278,138 +264,149 @@ endif
             endif
 #endif
 
-            call random_move(m,w,xx_cur,yy_cur,zz_cur,xx_new,yy_new,zz_new, max_move)
+            !call z_swap(m,atom1,atom2)
+            call cluster_move(m,atom1,atom2,cluster1,cluster2,cnatoms1,cnatoms2)
+            !call random_move(m,w,xx_cur,yy_cur,zz_cur,xx_new,yy_new,zz_new, max_move)
             ! check_curoffs returns false if the new atom placement is too close to
             ! another atom. Returns true if the move is okay. (hard shere cutoff)
-            do while( .not. check_cutoffs(m,cutoff_r,w) )
-                ! Check_cutoffs returned false so reset positions and try again.
-                m%xx%ind(w) = xx_cur
-                m%yy%ind(w) = yy_cur
-                m%zz%ind(w) = zz_cur
-                call random_move(m,w,xx_cur,yy_cur,zz_cur,xx_new,yy_new,zz_new, max_move)
-            end do
+            !do while( .not. check_cutoffs(m,cutoff_r,w) )
+            !    ! Check_cutoffs returned false so reset positions and try again.
+            !    m%xx%ind(w) = xx_cur
+            !    m%yy%ind(w) = yy_cur
+            !    m%zz%ind(w) = zz_cur
+            !    call random_move(m,w,xx_cur,yy_cur,zz_cur,xx_new,yy_new,zz_new, max_move)
+            !end do
             ! Update hutches, data for chi2, and chi2/del_chi
-            call hutch_move_atom(m,w,xx_new, yy_new, zz_new)
+            !call hutch_move_atom(m,w,xx_new, yy_new, zz_new)
     
 #ifdef USE_LMP
-            write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", w, " x ", xx_new, " y ", yy_new, " z ", zz_new
+            write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", atom1, " x ", m%xx%ind(atom1), " y ", m%yy%ind(atom1), " z ", m%zz%ind(atom1)
             call lammps_command(lmp, trim(lmp_cmd_str))
-            call lammps_command (lmp, 'run 0')
+            write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", atom2, " x ", m%xx%ind(atom2), " y ", m%yy%ind(atom2), " z ", m%zz%ind(atom2)
+            call lammps_command(lmp, trim(lmp_cmd_str))
+            do j=1, cnatoms1-1
+                write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", cluster1(j), " x ", m%xx%ind(cluster1(j)), " y ", m%yy%ind(cluster1(j)), " z ", m%yy%ind(cluster1(j))
+                call lammps_command(lmp, trim(lmp_cmd_str))
+            enddo
+            do j=1, cnatoms2-1
+                write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", cluster2(j), " x ", m%xx%ind(cluster2(j)), " y ", m%yy%ind(cluster2(j)), " z ", m%zz%ind(cluster2(j))
+                call lammps_command(lmp, trim(lmp_cmd_str))
+            enddo
+            !if(m%znum%ind(atom1) .eq. 40) then
+            !    temp = 1
+            !else if( m%znum%ind(atom1) .eq. 29) then
+            !    temp = 2
+            !else if( m%znum%ind(atom1) .eq. 13) then
+            !    temp = 3
+            !endif
+            !write(lmp_cmd_str, "(A9, I4, A6, I1)") "set atom ", atom1, " type ", temp
+            !call lammps_command(lmp, trim(lmp_cmd_str))
+            !if(m%znum%ind(atom2) .eq. 40) then
+            !    temp = 1
+            !else if( m%znum%ind(atom2) .eq. 29) then
+            !    temp = 2
+            !else if( m%znum%ind(atom2) .eq. 13) then
+            !    temp = 3
+            !endif
+            !write(lmp_cmd_str, "(A9, I4, A6, I1)") "set atom ", atom2, " type ", temp
+            !call lammps_command(lmp, trim(lmp_cmd_str))
+            call lammps_command (lmp, 'minimize 1.0e-4 1.0e-6 100 1000')
+            !call lammps_command (lmp, 'run 1000')
+            !call lammps_command (lmp, 'minimize 1.0e-4 1.0e-6 100 1000')
             call lammps_extract_compute (te2, lmp, 'pot', 0, 0)
+            ! Extracts a pointer to the arrays of positions for all atoms
+            call lammps_extract_atom (x, lmp, 'x')
+            ! Extracts a pointer to the arrays of id's for all atoms
+            call lammps_extract_atom (id, lmp, 'id')
+            ! Update all the model positions
+            do j=1,m%natoms
+                m%xx%ind(id(j)) = x(1,j)
+                m%yy%ind(id(j)) = x(2,j)
+                m%zz%ind(id(j)) = x(3,j)
+            enddo
 #else
             call eam_mc(m, w, xx_cur, yy_cur, zz_cur, xx_new, yy_new, zz_new, te2)
 #endif
-            te2 = te2/m%natoms
-            !if(myid .eq. 0) write(*,*) "Energy = ", te2
-
-            ! Calculate a randnum for accept/reject
-            randnum = ran2(iseed2)
-            ! Decide whether to reject just based on the energy
-            accepted = .true.
-            if(chi2_initial*0.1 > chi2_no_energy) then
-            if(log(1.0-randnum) > -(te2-chi2_old)*beta) then
-                accepted = .false.
-                call reject_position(m, w, xx_cur, yy_cur, zz_cur)
-                call hutch_move_atom(m,w,xx_cur, yy_cur, zz_cur)  !update hutches.  
-#ifndef USE_LMP
-                e2 = e1 ! eam
-#else
-                write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", w, " x ", xx_cur, " y ", yy_cur, " z ", zz_cur
-                call lammps_command(lmp, trim(lmp_cmd_str))
-#endif
-                if(myid.eq.0) write(*,*) "MC move rejected solely due to energy."
-            endif
-            endif
-                
-            if(accepted) then
-            ! Use multislice every 10k steps if specified.
-            if(use_multislice .and. mod(i,10000) .eq. 0) then
-                call fem_update(m, w, res, k, vk, vk_as, v_background, scatfact_e, mpi_comm_world, istat, square_pixel, .true.)
-                call update_scale_factor(scale_fac, scale_fac_initial, vk, vk_as)
-            else
-                call fem_update(m, w, res, k, vk, vk_as, v_background, scatfact_e, mpi_comm_world, istat, square_pixel, .false.)
-                !write(*,*) "I am core", myid, "and I have exited from fem_update into the main rmc block."
-            endif
-
-            chi2_no_energy = chi_square(alpha, vk_exp, vk_exp_err, vk, scale_fac, nk)
-
-
-            chi2_new = chi2_no_energy + te2
-            !chi2_new = chi2_new * m%natoms
-            del_chi = chi2_new - chi2_old
-            call mpi_bcast(del_chi, 1, mpi_double, 0, mpi_comm_world, mpierr)
-
             if(myid .eq. 0) write(*,*) "Energy = ", te2
-            if(myid .eq. 0) write(*,*) "Del-V(k) = ", chi2_no_energy
-            if(myid .eq. 0) write(*,*) "Del-chi = ", del_chi
-            if(myid .eq. 0) write(*,*) "chi2_old = ", chi2_old
-            if(myid .eq. 0) write(*,*) "chi2_new = ", chi2_new
 
+            chi2_new = te2
+            del_chi = chi2_new - chi2_old
+            call mpi_barrier(mpi_comm_world, mpierr) ! Pretty sure this is unnecessary
+
+            randnum = ran2(iseed2)
             ! Test if the move should be accepted or rejected based on del_chi
-            if(del_chi <0.0)then
+            !if(del_chi <0.0)then
+            if(.true.)then
                 ! Accept the move
-                call fem_accept_move(mpi_comm_world)
 #ifndef USE_LMP
                 e1 = e2 ! eam
 #endif
+                mold = m
                 chi2_old = chi2_new
                 accepted = .true.
-                if(myid.eq.0) write(*,*) "MC move accepted outright."
+                !if(myid.eq.0) write(*,*) "MC move accepted outright."
             else
                 ! Based on the random number above, even if del_chi is negative, decide
                 ! whether to move or not (statistically).
                 if(log(1.-randnum)<-del_chi*beta)then
                     ! Accept move
-                    call fem_accept_move(mpi_comm_world)
 #ifndef USE_LMP
                     e1 = e2 ! eam
 #endif
+                    mold = m
                     chi2_old = chi2_new
                     accepted = .true.
                     if(myid.eq.0) write(*,*) "MC move accepted due to probability. del_chi*beta = ", del_chi*beta
                 else
                     ! Reject move
-                    call reject_position(m, w, xx_cur, yy_cur, zz_cur)
-                    call hutch_move_atom(m,w,xx_cur, yy_cur, zz_cur)  !update hutches.
-                    call fem_reject_move(m, w, xx_cur, yy_cur, zz_cur, mpi_comm_world)
 #ifndef USE_LMP
                     e2 = e1 ! eam
-#else
-                    write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", w, " x ", xx_cur, " y ", yy_cur, " z ", zz_cur
-                    call lammps_command(lmp, trim(lmp_cmd_str))
 #endif
+                    m = mold
+                    do j=1, m%natoms
+                        write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", j, " x ", m%xx%ind(j), " y ", m%yy%ind(j), " z ", m%zz%ind(j)
+                        call lammps_command(lmp, trim(lmp_cmd_str))
+                    enddo
+                    !! Switch the atomic numbers BACK in lammps, should already
+                    !! be back in m due to m=mold
+                    !if(m%znum%ind(atom1) .eq. 40) then
+                    !    temp = 1
+                    !else if( m%znum%ind(atom1) .eq. 29) then
+                    !    temp = 2
+                    !else if( m%znum%ind(atom1) .eq. 13) then
+                    !    temp = 3
+                    !endif
+                    !write(lmp_cmd_str, "(A9, I4, A6, I1)") "set atom ", atom2, " type ", temp
+                    !call lammps_command(lmp, trim(lmp_cmd_str))
+                    !if(m%znum%ind(atom2) .eq. 40) then
+                    !    temp = 1
+                    !else if( m%znum%ind(atom2) .eq. 29) then
+                    !    temp = 2
+                    !else if( m%znum%ind(atom2) .eq. 13) then
+                    !    temp = 3
+                    !endif
+                    !write(lmp_cmd_str, "(A9, I4, A6, I1)") "set atom ", atom1, " type ", temp
+                    !call lammps_command(lmp, trim(lmp_cmd_str))
                     accepted = .false.
-                    if(myid.eq.0) write(*,*) "MC move rejected."
+                    if(myid.eq.0) write(*,*) "MC move rejected.", del_chi
                 endif
             endif
-            endif ! if(accepted) from above
 
-            if(myid .eq. 0) then
             if(accepted) then
-                acceptance_array(mod(i,100)+1) = 1
+                acceptance_array(mod(i,1000)+1) = 1
             else
-                acceptance_array(mod(i,100)+1) = 0
+                acceptance_array(mod(i,1000)+1) = 0
             endif
-            if(i .ge. 100) avg_acceptance = sum(acceptance_array)/100.0
+            if(i .gt. 1000) avg_acceptance = sum(acceptance_array)/1000.0
             ! Writing to 0 is stderr
-            if(i .ge. 100 .and. avg_acceptance .le. 0.05 .and. mod(i,100) .eq. 0) write(0,*) "WARNING!  Acceptance rate is low:", avg_acceptance
-            endif
+            if(i .gt. 1000 .and. avg_acceptance .le. 0.05) write(0,*) "WARNING!  Acceptance rate is low:", avg_acceptance
 
             ! Periodically save data.
             if(myid .eq. 0) then
-            if(mod(i,1000)==0)then
-                ! Write to vk_update ERROR HERE - if the most recent move was
-                ! rejected then this will print the incorrect vk. TODO
-                !write(vku_fn, "(A9)") "vk_update"
-                !write(step_str,*) i
-                !vku_fn = trim(trim(trim(trim(vku_fn)//jobID)//"_")//step_str)//".txt"
-                !open(32,file=trim(vku_fn),form='formatted',status='unknown')
-                !    do j=1, nk
-                !        write(32,*)k(j),vk(j)
-                !    enddo
-                !close(32)
+            if(mod(i,1)==0)then
                 ! Write to model_update
                 ! This takes a bit of time.
+            if(accepted) then
                 write(output_model_fn, "(A12)") "model_update"
                 write(step_str,*) i
                 output_model_fn = trim(trim(trim(trim(output_model_fn)//jobID)//"_")//step_str)//".xyz"
@@ -421,30 +418,16 @@ endif
                     enddo
                     write(33,*)"-1"
                 close(33)
-                !do j=myid+1,nrot,numprocs
-                !    write(myid_str,*) j
-                !    !output_model_fn = trim(trim(trim(trim(trim(trim(output_model_fn)//jobID)//"_")//step_str)//"_")//myid_str)//".xyz"
-                !    output_model_fn = trim(trim("mrot_model")//trim(myid_str))
-                !    !write(*,*) trim(output_model_fn)
-                !    open(33,file=trim(output_model_fn),form='formatted',status='unknown')
-                !        write(33,*)"mrot model. rot=", j, "step=",i
-                !        write(33,*)m%lx,m%ly,m%lz
-                !        do ii=1,mrot(j)%natoms
-                !            write(33,*)mrot(j)%znum%ind(ii), mrot(j)%xx%ind(ii), mrot(j)%yy%ind(ii), mrot(j)%zz%ind(ii)
-                !        enddo
-                !        write(33,*)"-1"
-                !    close(33)
-                !enddo
+            endif
             endif
             if(mod(i,1)==0)then
-                !if(accepted) then
+                if(accepted) then
                     ! Write chi2 info
                     open(36,file=trim(chi_squared_file),form='formatted',status='unknown',access='append')
-                        write(36,*) i, chi2_no_energy, te2
+                        write(36,*) i, te2
                     close(36)
-                !endif
+                endif
             endif
-#ifdef TIMING
             if(mod(i,1)==0)then
                 ! Write to time_elapsed
                 open(35,file=trim(time_elapsed),form='formatted',status='unknown',access='append')
@@ -452,8 +435,7 @@ endif
                     write (35,*) i, t1-t0, (t1-t0)/i, t1-t2
                 close(35)
             endif
-#endif
-            if(mod(i,100)==0 .and. i .ge. 100)then
+            if(mod(i,1000)==0 .and. i .gt. 100)then
                 ! Write to acceptance rate
                 open(40,file=trim(acceptance_rate_fn),form='formatted',status='unknown',access='append')
                     write(40,*) i, avg_acceptance
@@ -461,16 +443,14 @@ endif
             endif
             endif ! myid == 0
 
-            ! Every 200,000 steps lower the temp, max_move, and reset beta.
-            if(mod(i,200000)==0)then
+            ! Every 50,000 steps lower the temp, max_move, and reset beta.
+            if(mod(i,50000)==0)then
                 temperature = temperature * sqrt(0.7)
                 if(myid.eq.0) write(*,*) "Lowering temp to", temperature, "at step", i
                 max_move = max_move * sqrt(0.94)
                 beta=1./((8.6171e-05)*temperature)
             endif
             
-            i=i+1
-
         enddo !RMC do loop
         write(*,*) "Monte Carlo Finished!"
 
@@ -494,14 +474,12 @@ endif
             open(56,file=trim(energy_fn),form='formatted', status='unknown',access='append')
             write(56,*) i, te2
             close(56)
-#ifdef TIMING
             ! Write final time spent.
             open(57,file=trim(time_elapsed),form='formatted',status='unknown',access='append')
             t1 = omp_get_wtime()
             write (57,*) i, t1-t0
             write(57,*) "Finshed.", numprocs, "processors."
             close(57)
-#endif
         endif
     endif ! Use RMC
 

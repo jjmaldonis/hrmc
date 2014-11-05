@@ -29,9 +29,9 @@ module fem_mod
         real :: dr ! Distance between pixels. Note, therefore, that there is half this distance between the pixels and the world edge. This is NOT the distance between the pixel centers. This is the distance between the edges of two different pixels. dr + phys_diam is the distance between the pixel centers!
     end type pix_array
     real, save, dimension(:,:), allocatable :: rot ! nrot x 3 list of (phi, psi, theta) rotation angles
-    double precision, save, dimension(:,:,:), allocatable :: int_i, int_sq, int_i_as, int_as_sq  ! nk x npix x nrot.  int_sq == int_i**2. int_i_as is for autoslice
-    double precision, save, dimension(:,:,:), allocatable :: old_int, old_int_sq
-    double precision, save, dimension(:), allocatable :: int_sum, int_sq_sum  ! nk long sums of int and int_sq arrays for calculating V(k)
+    real, save, dimension(:,:,:), allocatable :: int_i, int_sq, int_i_as, int_as_sq  ! nk x npix x nrot.  int_sq == int_i**2. int_i_as is for autoslice
+    real, save, dimension(:,:,:), allocatable :: old_int, old_int_sq
+    real, save, dimension(:), allocatable :: int_sum, int_sq_sum  ! nk long sums of int and int_sq arrays for calculating V(k)
     real, save, allocatable, dimension(:) :: j0, A1                                               
     type(model), save, dimension(:), pointer, public :: mrot  ! array of rotated models
     type(model), save, dimension(:), pointer :: mcopy  ! array of rotated models
@@ -116,7 +116,7 @@ contains
 
         !if (istat /= 0) return
         if( mod(m%lx,pa%phys_diam) >= 0.001 ) then
-            write(0,*) "WARNING! Your world size should be an integer multiple of the resolution. Pixel diameter = ", pa%phys_diam, ". World size = ", m%lx
+            write(*,*) "WARNING! Your world size should be an integer multiple of the resolution. Pixel diameter = ", pa%phys_diam, ". World size = ", m%lx
         endif
 
         call read_f_e
@@ -322,8 +322,8 @@ contains
         enddo
         
         if(rot(1,1) .ne. 0.0 .or. rot(1,2) .ne. 0.0 .or. rot(1,3) .ne. 0.0) then
-            write(0,*) "WARNING: ERROR: The first rotation MUST be 0,0,0!"
-            write(0,*) "They currently are", rot(1,1), rot(1,2), rot(1,3)
+            write(*,*) "WARNING: ERROR: The first rotation MUST be 0,0,0!"
+            write(*,*) "They currently are", rot(1,1), rot(1,2), rot(1,3)
         endif
 
         deallocate(rot_temp)
@@ -346,9 +346,9 @@ contains
             ! was going on here if I didn't do this. It was a result of pa%phys_diam being
             ! larger than m%lx by a tiny amount due to rounding errors from the
             ! inputs. Not sure how best to fix it right now.
-            write(0,*)
-            write(0,*) "WARNING: There was a rounding error in init_pix, it was manually corrected but you should check to make sure nothing funny is happening."
-            write(0,*)
+            write(*,*)
+            write(*,*) "WARNING: There was a rounding error in init_pix, it was manually corrected but you should check to make sure nothing funny is happening."
+            write(*,*)
         endif
         pa%npix_1D = floor( m%lx / pa%phys_diam )
         pa%npix = pa%npix_1D**2
@@ -462,14 +462,14 @@ contains
         type(model), intent(in) :: m
         real, intent(in) :: res
         real, dimension(:), intent(in) :: k
-        double precision, dimension(:), INTENT(OUT) :: Vk, vk_as
-        double precision, dimension(:), intent(in) :: v_background
+        real, dimension(:), INTENT(OUT) :: Vk, vk_as
+        real, dimension(:), intent(in) :: v_background
         real, dimension(:,:), pointer :: scatfact_e
         integer, intent(out) :: istat
         logical, optional, intent(in) :: square_pixel
         integer, optional, intent(in) :: rot_begin, rot_end
-        double precision, dimension(:), allocatable :: psum_int, psum_int_sq, sum_int, sum_int_sq  !mpi
-        double precision, dimension(:), allocatable :: psum_int_as, psum_int_as_sq, sum_int_as, sum_int_as_sq  !mpi
+        real, dimension(:), allocatable :: psum_int, psum_int_sq, sum_int, sum_int_sq  !mpi
+        real, dimension(:), allocatable :: psum_int_as, psum_int_as_sq, sum_int_as, sum_int_as_sq  !mpi
         integer :: comm
         integer :: i, j
         integer begin_rot, end_rot
@@ -548,10 +548,10 @@ contains
         enddo
 
         call mpi_barrier(comm, mpierr)
-        call mpi_reduce (psum_int, sum_int, size(k), mpi_double, mpi_sum, 0, comm, mpierr)
-        call mpi_reduce (psum_int_sq, sum_int_sq, size(k), mpi_double, mpi_sum, 0, comm, mpierr)
-        if(use_autoslice) call mpi_reduce (psum_int_as, sum_int_as, size(k), mpi_double, mpi_sum, 0, comm, mpierr)
-        if(use_autoslice) call mpi_reduce (psum_int_as_sq, sum_int_as_sq, size(k), mpi_double, mpi_sum, 0, comm, mpierr)
+        call mpi_reduce (psum_int, sum_int, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
+        call mpi_reduce (psum_int_sq, sum_int_sq, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
+        if(use_autoslice) call mpi_reduce (psum_int_as, sum_int_as, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
+        if(use_autoslice) call mpi_reduce (psum_int_as_sq, sum_int_as_sq, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
 
         if(myid.eq.0)then
             do i=1, nk
@@ -580,11 +580,10 @@ contains
     ! use_autoslice is specified.
         use  omp_lib
         use, intrinsic :: iso_c_binding
-        include 'mpif.h'
         type(model), intent(inout) :: m_int
         real, intent(in) :: res, px, py
         real, dimension(nk), intent(in) :: k
-        double precision, dimension(nk), intent(out) :: int_i, int_i_as
+        real, dimension(nk), intent(out) :: int_i, int_i_as
         real, dimension(:,:), pointer :: scatfact_e
         integer, intent(out) :: istat
         logical, intent(in) :: square_pixel
@@ -600,7 +599,7 @@ contains
         real, allocatable, dimension(:) :: rr_x, rr_y
         real :: sqrt1_2_res
         real :: k_1
-        double precision:: timer1, timer2
+        real :: timer1, timer2
         integer :: nthr, thrnum
 
         ! --- Autoslice variables. --- !
@@ -640,7 +639,7 @@ contains
             end function islice
         end interface
 
-        !timer1 = mpi_wtime()
+        !call cpu_time(timer1)
 
         ! Regardless of whether or not we use autoslice, do the
         ! normal, fast intensity calculation for comparison.
@@ -869,10 +868,10 @@ contains
             deallocate(wobble)
         endif ! Use autoslice?
 
-        !timer2 = mpi_wtime()
-        !write (*,*) 'Intensity call took', timer2 - timer1!, 'seconds on processor', myid!, 'and core', thrnum
+        !call cpu_time(timer2)
         !time_in_int = time_in_int + timer2-timer1
         !write (*,*) 'Total Elapsed CPU time in Intensity= ', time_in_int
+        !write (*,*) 'Intensity call took', timer2 - timer1, 'seconds on processor', myid!, 'and core', thrnum
         !if(m_int%id .eq. 114) write(*,*) "Intensity for model:", m_int%id
         !if(m_int%id .eq. 114) write(*,*) int_i
         !if(m_int%id .eq. 114) write(*,*) "Intensity for model:", m_int%id, "complete."
@@ -923,7 +922,6 @@ contains
             ! haven't gotten to yet.
             do j=mroti%rot_i(atom)%nat+1, rot_atom%natoms
                 call add_atom(mroti, atom, rot_atom%xx%ind(j), rot_atom%yy%ind(j), rot_atom%zz%ind(j), rot_atom%znum%ind(j), rot_atom%znum_r%ind(j) )
-!write(*,*) "Added to", mroti%xx%ind(mroti%rot_i(atom)%ind(j)),  mroti%yy%ind(mroti%rot_i(atom)%ind(j)), mroti%zz%ind(mroti%rot_i(atom)%ind(j))
             enddo
 
         else if( mroti%rot_i(atom)%nat .gt. rot_atom%natoms ) then
@@ -947,7 +945,6 @@ contains
             ! saves deleting rot_i(atom) and re-implementing it, as well
             ! as all the atoms it points to.
             do j=1,rot_atom%natoms
-!write(*,*) "Moving", mroti%rot_i(atom)%ind(j), "from", mroti%xx%ind(mroti%rot_i(atom)%ind(j)),  mroti%yy%ind(mroti%rot_i(atom)%ind(j)), mroti%zz%ind(mroti%rot_i(atom)%ind(j)), "to", rot_atom%xx%ind(j), rot_atom%yy%ind(j), rot_atom%zz%ind(j)
                 call move_atom(mroti, mroti%rot_i(atom)%ind(j), &
                 rot_atom%xx%ind(j), rot_atom%yy%ind(j), rot_atom%zz%ind(j) )
             enddo
@@ -972,21 +969,18 @@ contains
         type(model), intent(in) :: m_in
         integer, intent(in) :: atom
         real, intent(in) :: res
-        real, dimension(:), intent(in) :: k
-        double precision, dimension(:), intent(in) :: v_background
-        double precision, dimension(:), intent(out) :: vk, vk_as
+        real, dimension(:), intent(in) :: k, v_background
+        real, dimension(:), intent(out) :: vk, vk_as
         real, dimension(:,:), pointer :: scatfact_e
         integer, intent(out) :: istat
         logical, intent(in) :: square_pixel
         logical, intent(in) :: use_autoslice
-        double precision, dimension(:), allocatable :: psum_int, psum_int_sq, sum_int, sum_int_sq !mpi
-        double precision, dimension(:), allocatable :: psum_int_as, psum_int_as_sq, sum_int_as, sum_int_as_sq !mpi autoslice
+        real, dimension(:), allocatable :: psum_int, psum_int_sq, sum_int, sum_int_sq !mpi
+        real, dimension(:), allocatable :: psum_int_as, psum_int_as_sq, sum_int_as, sum_int_as_sq !mpi autoslice
         integer :: comm
         type(model) :: moved_atom, rot_atom
         integer :: i, j, m, n, ntpix
         logical, dimension(:,:), allocatable :: update_pix
-        !integer, dimension(:,:), allocatable :: sorted_pix
-        !integer :: num_sorted_pix
         type(index_list) :: pix_il
 
         istat = 0
@@ -994,10 +988,6 @@ contains
         allocate(update_pix(nrot,pa%npix),stat=istat)
         call check_allocation(istat, 'Cannot allocate memory for pixel update array in fem.')
         update_pix = .FALSE.
-        call check_allocation(istat, 'Cannot allocate memory for pixel update array in fem.')
-        !allocate(sorted_pix(nrot*pa%npix,2),stat=istat)
-        !sorted_pix = 0
-        !num_sorted_pix = 0
 
         ! Create a new model (moved_atom) with only one atom in it and put the
         ! position etc of the moved atom into it.
@@ -1108,18 +1098,7 @@ contains
                 enddo
 
                 ! ------- Update atoms in the rotated model. ------- !
-                !write(*,*) "Moving atom", atom, mrot(i)%rot_i(atom)%nat
-                !do n=1, mrot(i)%rot_i(atom)%nat
-                !    write(*,*) "  from", mrot(i)%xx%ind(mrot(i)%rot_i(atom)%ind(n)), mrot(i)%yy%ind(mrot(i)%rot_i(atom)%ind(n)), mrot(i)%zz%ind(mrot(i)%rot_i(atom)%ind(n))
-                !enddo
-                !do n=1, rot_atom%natoms
-                !    write(*,*) "  to  ", rot_atom%xx%ind(n), rot_atom%yy%ind(n), rot_atom%zz%ind(n)
-                !enddo
                 call move_atom_in_rotated_model(atom,rot_atom,mrot(i),i)
-                !write(*,*) "Moved atom", atom, mrot(i)%rot_i(atom)%nat
-                !do n=1, mrot(i)%rot_i(atom)%nat
-                !    write(*,*) "  to  ", mrot(i)%xx%ind(mrot(i)%rot_i(atom)%ind(n)), mrot(i)%yy%ind(mrot(i)%rot_i(atom)%ind(n)), mrot(i)%zz%ind(mrot(i)%rot_i(atom)%ind(n))
-                !enddo
 
                 ! Error check!
                 do n=1, rot_atom%natoms
@@ -1143,18 +1122,6 @@ contains
                 rot_atom%znum%ind, rot_atom%rot_i, rot_atom%znum_r%ind, stat=istat)
 
         enddo rotations
-
-        !call mpi_reduce(update_pix, update_pix, nrot*pa%npix, mpi_logical, mpi_lor, 0, comm, mpierr)
-        !call mpi_bcast (update_pix, update_pix, nrot*pa%npix, mpi_logical, mpi_lor, 0, comm, mpierr)
-        !do i=1, nrot
-        !    do m=1, pa%npix
-        !        if(update_pix(i,m)) then
-        !            num_sorted_pix = num_sorted_pix + 1
-        !            sorted_pix(num_sorted_pix,0) = i
-        !            sorted_pix(num_sorted_pix,1) = m
-        !        endif
-        !    enddo
-        !enddo
 
         ! For debugging only.
         !ntpix = 0
@@ -1208,16 +1175,10 @@ contains
         ! somewhat off.
 
         call mpi_barrier(comm, mpierr)
-        call mpi_reduce (psum_int, sum_int, size(k), mpi_double, mpi_sum, 0, comm, mpierr)
-        !do i=1,numprocs
-        !    if(myid == i) then
-        !        write(*,*) "Core",myid,"Intensity:", psum_int
-        !    endif
-        !    call sleep(1)
-        !enddo
-        call mpi_reduce (psum_int_sq, sum_int_sq, size(k), mpi_double, mpi_sum, 0, comm, mpierr)
-        if(use_autoslice) call mpi_reduce (psum_int_as, sum_int_as, size(k), mpi_double, mpi_sum, 0, comm, mpierr)
-        if(use_autoslice) call mpi_reduce (psum_int_as_sq, sum_int_as_sq, size(k), mpi_double, mpi_sum, 0, comm, mpierr)
+        call mpi_reduce (psum_int, sum_int, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
+        call mpi_reduce (psum_int_sq, sum_int_sq, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
+        if(use_autoslice) call mpi_reduce (psum_int_as, sum_int_as, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
+        if(use_autoslice) call mpi_reduce (psum_int_as_sq, sum_int_as_sq, size(k), mpi_real, mpi_sum, 0, comm, mpierr)
         !write(*,*) "I am core", myid, "and I am past mpi_reduce."
 
         ! Recalculate the variance

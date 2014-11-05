@@ -663,9 +663,9 @@ contains
         if(hx .gt. m%ha%nhutch_x) write(*,*) "Warning: Hutch is out of range!  Check x dimensions.", hx
         if(hy .gt. m%ha%nhutch_y) write(*,*) "Warning: Hutch is out of range!  Check y dimensions.", hy
         if(hz .gt. m%ha%nhutch_z) write(*,*) "Warning: Hutch is out of range!  Check z dimensions.", hz
-        if(hx .lt. 1) write(*,*) "Warning: Hutch is out of range! Check x dimensions.", hx
-        if(hy .lt. 1) write(*,*) "Warning: Hutch is out of range! Check y dimensions.", hy
-        if(hz .lt. 1) write(*,*) "Warning: Hutch is out of range! Check z dimensions.", hz
+        if(hx .lt. 1) write(*,*) "Warning: Hutch is out of range! Check x dimensions.", hx, xx,yy,zz
+        if(hy .lt. 1) write(*,*) "Warning: Hutch is out of range! Check y dimensions.", hy, xx,yy,zz
+        if(hz .lt. 1) write(*,*) "Warning: Hutch is out of range! Check z dimensions.", hz, xx,yy,zz
     end subroutine hutch_position
 
 
@@ -804,7 +804,7 @@ contains
         integer :: i, j, k  ! counting variables
         integer, dimension(:), allocatable, target :: temp_atoms
         real, dimension(3) :: hcenter
-        real :: dist2, distx, disty, distz
+        real :: dist2
         integer :: i_start, i_end, j_start, j_end, k_start, k_end
         real :: x_start, x_end, y_start, y_end, z_start, z_end
         !integer, dimension(11,11,11) :: used_hutches
@@ -826,6 +826,7 @@ contains
         z_start = pz-radius
         z_end = pz+radius
         !write(*,*) "radius=", radius
+        !write(*,*) "px,py,pz", px,py,pz
         !write(*,*) "x_start, x_end=", x_start, x_end
         !write(*,*) "y_start, y_end=", y_start, y_end
         !write(*,*) "z_start, z_end=", z_start, z_end
@@ -872,16 +873,8 @@ contains
                     hcenter(2) = -m%ly/2.0 + m%ha%hutch_size/2.0 + (j-1)*m%ha%hutch_size
                     hcenter(3) = -m%lz/2.0 + m%ha%hutch_size/2.0 + (k-1)*m%ha%hutch_size
                     ! Calculate distance.
-                    distx = px-hcenter(1)
-                    disty = py-hcenter(2)
-                    distz = pz-hcenter(3)
-                    distx = distx - m%lx*anint(distx/m%lx)
-                    disty = disty - m%ly*anint(disty/m%ly)
-                    distz = distz - m%lz*anint(distz/m%lz)
-                    dist2 = (distx)**2 + (disty)**2 + (distz)**2
-                    if( dist2 < (radius + m%ha%hutch_size*sqrt(2.0))**2 ) then
-                    !dist2 = (px-hcenter(1))**2 + (py-hcenter(2))**2 + (pz-hcenter(3))**2
-                    !if( dist2 < (radius + m%ha%hutch_size*sqrt(2.0))**2 .or. dist2 > ((m%lx-radius)*sqrt(3.0))**2 ) then ! The 2nd part is for PBC. It only works if the world is a cube.
+                    dist2 = (px-hcenter(1))**2 + (py-hcenter(2))**2 + (pz-hcenter(3))**2
+                    if( dist2 < (radius + m%ha%hutch_size/sqrt(2.0))**2 .or. dist2 > ((m%lx-radius)*sqrt(3.0))**2 ) then ! The 2nd part is for PBC. It only works if the world is a cube.
                         call hutch_position(m, hcenter(1), hcenter(2), hcenter(3), hx, hy, hz)
                         !used_hutches(hx,hy,hz) = 1
                         if(m%ha%h(hx, hy, hz)%nat /= 0) then

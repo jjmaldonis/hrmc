@@ -1,4 +1,5 @@
 
+
          FUNCTION ran2(idum)
          INTEGER idum,IM1,IM2,IMM1,IA1,IA2,IQ1,IQ2,IR1,IR2,NTAB,NDIV
          REAL ran2,AM,EPS,RNMX
