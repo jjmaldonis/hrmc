@@ -27,6 +27,9 @@ subroutine cluster_move(m,atom1,atom2,atoms1,atoms2,cnatoms1,cnatoms2)
     real :: cx1, cy1, cz1, cx2, cy2, cz2 ! Cluster centers of volume
     real :: dx, dy, dz ! Displacement vector
     real :: mind, r, r2, rx1, ry1, rz1, rx2, ry2, rz2
+    real :: rx,ry,rz
+    real :: radius
+    radius = 3.5
 
     iseed = 791315
 
@@ -36,7 +39,7 @@ subroutine cluster_move(m,atom1,atom2,atoms1,atoms2,cnatoms1,cnatoms2)
     atom2 = int(m%natoms*rand2)+1
     !write(*,*) "Moving clusters:", atom1, atom2
 
-    call hutch_list_3D(m, m%xx%ind(atom1), m%yy%ind(atom1), m%zz%ind(atom1), 3.5, atoms1, istat, cnatoms1)
+    call hutch_list_3D(m, m%xx%ind(atom1), m%yy%ind(atom1), m%zz%ind(atom1), radius, atoms1, istat, cnatoms1)
     cx1 = m%xx%ind(atom1)
     cy1 = m%yy%ind(atom1)
     cz1 = m%zz%ind(atom1)
@@ -49,7 +52,7 @@ subroutine cluster_move(m,atom1,atom2,atoms1,atoms2,cnatoms1,cnatoms2)
     cy1 = cy1/float(cnatoms1)
     cz1 = cz1/float(cnatoms1)
 
-    call hutch_list_3D(m, m%xx%ind(atom2), m%yy%ind(atom2), m%zz%ind(atom2), 3.5, atoms2, istat, cnatoms2)
+    call hutch_list_3D(m, m%xx%ind(atom2), m%yy%ind(atom2), m%zz%ind(atom2), radius, atoms2, istat, cnatoms2)
     cx2 = m%xx%ind(atom2)
     cy2 = m%yy%ind(atom2)
     cz2 = m%zz%ind(atom2)
@@ -68,6 +71,28 @@ subroutine cluster_move(m,atom1,atom2,atoms1,atoms2,cnatoms1,cnatoms2)
     !write(*,*)  "dx,dy,dz", dx,dy,dz
     !write(*,*) "boxsizes", -m%lx/2.0, m%lx/2
 
+    do i=1, cnatoms1-1
+        rx = m%xx%ind(atom1)-m%xx%ind(atoms1(i))
+        ry = m%yy%ind(atom1)-m%yy%ind(atoms1(i))
+        rz = m%zz%ind(atom1)-m%zz%ind(atoms1(i))
+        rx = rx-m%lx*anint(rx/m%lx)
+        ry = ry-m%ly*anint(ry/m%ly)
+        rz = rz-m%lz*anint(rz/m%lz)
+        if(rx**2 + ry**2 + rz**2 < radius**2 .and. atoms1(i) .ne. atom1) then
+            m%xx%ind(atoms1(i)) = m%xx%ind(atoms1(i)) + dx
+            m%yy%ind(atoms1(i)) = m%yy%ind(atoms1(i)) + dy
+            m%zz%ind(atoms1(i)) = m%zz%ind(atoms1(i)) + dz
+            if(m%xx%ind(atoms1(i)) .gt. m%lx*0.5) m%xx%ind(atoms1(i))=m%xx%ind(atoms1(i))-m%lx
+            if(m%yy%ind(atoms1(i)) .gt. m%ly*0.5) m%yy%ind(atoms1(i))=m%yy%ind(atoms1(i))-m%ly
+            if(m%zz%ind(atoms1(i)) .gt. m%lz*0.5) m%zz%ind(atoms1(i))=m%zz%ind(atoms1(i))-m%lz
+            if(m%xx%ind(atoms1(i)) .lt. -m%lx*0.5) m%xx%ind(atoms1(i))=m%xx%ind(atoms1(i))+m%lx
+            if(m%yy%ind(atoms1(i)) .lt. -m%ly*0.5) m%yy%ind(atoms1(i))=m%yy%ind(atoms1(i))+m%ly
+            if(m%zz%ind(atoms1(i)) .lt. -m%lz*0.5) m%zz%ind(atoms1(i))=m%zz%ind(atoms1(i))+m%lz
+            !write(*,*) m%xx%ind(atoms1(i)), m%yy%ind(atoms1(i)), m%zz%ind(atoms1(i))
+            call hutch_move_atom(m,atoms1(i), m%xx%ind(atoms1(i)), m%yy%ind(atoms1(i)), m%zz%ind(atoms1(i)))
+            !write(*,*) m%ha%atom_hutch(atoms1(i),1), m%ha%atom_hutch(atoms1(i),2), m%ha%atom_hutch(atoms1(i),3)
+        endif
+    enddo
     m%xx%ind(atom1) = m%xx%ind(atom1) + dx
     m%yy%ind(atom1) = m%yy%ind(atom1) + dy
     m%zz%ind(atom1) = m%zz%ind(atom1) + dz
@@ -80,21 +105,29 @@ subroutine cluster_move(m,atom1,atom2,atoms1,atoms2,cnatoms1,cnatoms2)
     !write(*,*) m%xx%ind(atom1), m%yy%ind(atom1), m%zz%ind(atom1)
     call hutch_move_atom(m,atom1, m%xx%ind(atom1), m%yy%ind(atom1), m%zz%ind(atom1))
     !write(*,*) m%ha%atom_hutch(atom1,1), m%ha%atom_hutch(atom1,2), m%ha%atom_hutch(atom1,3)
-    do i=1, cnatoms1-1
-        m%xx%ind(atoms1(i)) = m%xx%ind(atoms1(i)) + dx
-        m%yy%ind(atoms1(i)) = m%yy%ind(atoms1(i)) + dy
-        m%zz%ind(atoms1(i)) = m%zz%ind(atoms1(i)) + dz
-        if(m%xx%ind(atoms1(i)) .gt. m%lx*0.5) m%xx%ind(atoms1(i))=m%xx%ind(atoms1(i))-m%lx
-        if(m%yy%ind(atoms1(i)) .gt. m%ly*0.5) m%yy%ind(atoms1(i))=m%yy%ind(atoms1(i))-m%ly
-        if(m%zz%ind(atoms1(i)) .gt. m%lz*0.5) m%zz%ind(atoms1(i))=m%zz%ind(atoms1(i))-m%lz
-        if(m%xx%ind(atoms1(i)) .lt. -m%lx*0.5) m%xx%ind(atoms1(i))=m%xx%ind(atoms1(i))+m%lx
-        if(m%yy%ind(atoms1(i)) .lt. -m%ly*0.5) m%yy%ind(atoms1(i))=m%yy%ind(atoms1(i))+m%ly
-        if(m%zz%ind(atoms1(i)) .lt. -m%lz*0.5) m%zz%ind(atoms1(i))=m%zz%ind(atoms1(i))+m%lz
-        !write(*,*) m%xx%ind(atoms1(i)), m%yy%ind(atoms1(i)), m%zz%ind(atoms1(i))
-        call hutch_move_atom(m,atom1, m%xx%ind(atoms1(i)), m%yy%ind(atoms1(i)), m%zz%ind(atoms1(i)))
-        !write(*,*) m%ha%atom_hutch(atoms1(i),1), m%ha%atom_hutch(atoms1(i),2), m%ha%atom_hutch(atoms1(i),3)
-    enddo
 
+    do i=1, cnatoms2-1
+        rx = m%xx%ind(atom2)-m%xx%ind(atoms2(i))
+        ry = m%yy%ind(atom2)-m%yy%ind(atoms2(i))
+        rz = m%zz%ind(atom2)-m%zz%ind(atoms2(i))
+        rx = rx-m%lx*anint(rx/m%lx)
+        ry = ry-m%ly*anint(ry/m%ly)
+        rz = rz-m%lz*anint(rz/m%lz)
+        if(rx**2 + ry**2 + rz**2 < radius**2 .and. atoms2(i) .ne. atom2) then
+            m%xx%ind(atoms2(i)) = m%xx%ind(atoms2(i)) - dx
+            m%yy%ind(atoms2(i)) = m%yy%ind(atoms2(i)) - dy
+            m%zz%ind(atoms2(i)) = m%zz%ind(atoms2(i)) - dz
+            if(m%xx%ind(atoms2(i)) .gt. m%lx*0.5) m%xx%ind(atoms2(i))=m%xx%ind(atoms2(i))-m%lx
+            if(m%yy%ind(atoms2(i)) .gt. m%ly*0.5) m%yy%ind(atoms2(i))=m%yy%ind(atoms2(i))-m%ly
+            if(m%zz%ind(atoms2(i)) .gt. m%lz*0.5) m%zz%ind(atoms2(i))=m%zz%ind(atoms2(i))-m%lz
+            if(m%xx%ind(atoms2(i)) .lt. -m%lx*0.5) m%xx%ind(atoms2(i))=m%xx%ind(atoms2(i))+m%lx
+            if(m%yy%ind(atoms2(i)) .lt. -m%ly*0.5) m%yy%ind(atoms2(i))=m%yy%ind(atoms2(i))+m%ly
+            if(m%zz%ind(atoms2(i)) .lt. -m%lz*0.5) m%zz%ind(atoms2(i))=m%zz%ind(atoms2(i))+m%lz
+            !write(*,*) m%xx%ind(atoms2(i)), m%yy%ind(atoms2(i)), m%zz%ind(atoms2(i))
+            call hutch_move_atom(m,atoms2(i), m%xx%ind(atoms2(i)), m%yy%ind(atoms2(i)), m%zz%ind(atoms2(i)))
+            !write(*,*) m%ha%atom_hutch(atoms2(i),1), m%ha%atom_hutch(atoms2(i),2), m%ha%atom_hutch(atoms2(i),3)
+        endif
+    enddo
     m%xx%ind(atom2) = m%xx%ind(atom2) - dx
     m%yy%ind(atom2) = m%yy%ind(atom2) - dy
     m%zz%ind(atom2) = m%zz%ind(atom2) - dz
@@ -107,31 +140,17 @@ subroutine cluster_move(m,atom1,atom2,atoms1,atoms2,cnatoms1,cnatoms2)
     !write(*,*) m%xx%ind(atom2), m%yy%ind(atom2), m%zz%ind(atom2)
     call hutch_move_atom(m,atom2, m%xx%ind(atom2), m%yy%ind(atom2), m%zz%ind(atom2))
     !write(*,*) m%ha%atom_hutch(atom2,1), m%ha%atom_hutch(atom2,2), m%ha%atom_hutch(atom2,3)
-    do i=1, cnatoms2-1
-        m%xx%ind(atoms2(i)) = m%xx%ind(atoms2(i)) - dx
-        m%yy%ind(atoms2(i)) = m%yy%ind(atoms2(i)) - dy
-        m%zz%ind(atoms2(i)) = m%zz%ind(atoms2(i)) - dz
-        if(m%xx%ind(atoms2(i)) .gt. m%lx*0.5) m%xx%ind(atoms2(i))=m%xx%ind(atoms2(i))-m%lx
-        if(m%yy%ind(atoms2(i)) .gt. m%ly*0.5) m%yy%ind(atoms2(i))=m%yy%ind(atoms2(i))-m%ly
-        if(m%zz%ind(atoms2(i)) .gt. m%lz*0.5) m%zz%ind(atoms2(i))=m%zz%ind(atoms2(i))-m%lz
-        if(m%xx%ind(atoms2(i)) .lt. -m%lx*0.5) m%xx%ind(atoms2(i))=m%xx%ind(atoms2(i))+m%lx
-        if(m%yy%ind(atoms2(i)) .lt. -m%ly*0.5) m%yy%ind(atoms2(i))=m%yy%ind(atoms2(i))+m%ly
-        if(m%zz%ind(atoms2(i)) .lt. -m%lz*0.5) m%zz%ind(atoms2(i))=m%zz%ind(atoms2(i))+m%lz
-        !write(*,*) m%xx%ind(atoms2(i)), m%yy%ind(atoms2(i)), m%zz%ind(atoms2(i))
-        call hutch_move_atom(m,atom2, m%xx%ind(atoms2(i)), m%yy%ind(atoms2(i)), m%zz%ind(atoms2(i)))
-        !write(*,*) m%ha%atom_hutch(atoms2(i),1), m%ha%atom_hutch(atoms2(i),2), m%ha%atom_hutch(atoms2(i),3)
-    enddo
 
-    !mind = 10000.0
-    !do i=1, m%natoms
-    !    do j=1, m%natoms
-    !        if(i .ne. j) then
-    !            r = sqrt( (m%xx%ind(i)-m%xx%ind(j))**2 + (m%yy%ind(i)-m%yy%ind(j))**2 + (m%zz%ind(i)-m%zz%ind(j))**2)
-    !            if(r .lt. mind) mind = r
-    !        endif
-    !    enddo
-    !enddo
-    !write(*,*) "MIN DIST BETWEEN ATOMS IS", mind
+    mind = 10000.0
+    do i=1, m%natoms
+        do j=1, m%natoms
+            if(i .ne. j) then
+                r = sqrt( (m%xx%ind(i)-m%xx%ind(j))**2 + (m%yy%ind(i)-m%yy%ind(j))**2 + (m%zz%ind(i)-m%zz%ind(j))**2)
+                if(r .lt. mind) mind = r
+            endif
+        enddo
+    enddo
+    write(*,*) "MIN DIST BETWEEN ATOMS IS", mind
 
 
 

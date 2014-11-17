@@ -180,7 +180,7 @@ endif
     ! Read input model
     call read_model(param_filename, model_filename, comment, m, istat)
     call check_model(m, istat)
-    call recenter_model(0.0, 0.0, 0.0, m)
+    !call recenter_model(0.0, 0.0, 0.0, m)
 
     ! Read input parameters
     allocate(cutoff_r(m%nelements,m%nelements),stat=istat)
@@ -199,7 +199,8 @@ endif
     res = 0.61/Q
     nk = size(k)
     beta=1./((8.6171e-05)*temperature)
-    iseed2 = 104756
+    !iseed2 = 104756
+    iseed2 = 104754
     if(myid.eq.0) write(*,*) "random number generator seed =", iseed2
     square_pixel = .TRUE. ! RMC uses square pixels, not round.
     use_rmc = .TRUE.
@@ -264,7 +265,6 @@ endif
             endif
 #endif
 
-            !call z_swap(m,atom1,atom2)
             call cluster_move(m,atom1,atom2,cluster1,cluster2,cnatoms1,cnatoms2)
             !call random_move(m,w,xx_cur,yy_cur,zz_cur,xx_new,yy_new,zz_new, max_move)
             ! check_curoffs returns false if the new atom placement is too close to
@@ -280,18 +280,32 @@ endif
             !call hutch_move_atom(m,w,xx_new, yy_new, zz_new)
     
 #ifdef USE_LMP
+            call lammps_extract_atom (id, lmp, 'id')
             write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", atom1, " x ", m%xx%ind(atom1), " y ", m%yy%ind(atom1), " z ", m%zz%ind(atom1)
             call lammps_command(lmp, trim(lmp_cmd_str))
             write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", atom2, " x ", m%xx%ind(atom2), " y ", m%yy%ind(atom2), " z ", m%zz%ind(atom2)
             call lammps_command(lmp, trim(lmp_cmd_str))
+            call lammps_extract_atom (x, lmp, 'x')
+            call lammps_extract_atom (id, lmp, 'id')
+
+            !write(*,*) atom1,m%xx%ind(atom1),m%yy%ind(atom1),m%zz%ind(atom1)
+            !do j=1,m%natoms
+            !    if(id(j) == atom1) write(*,*) j,x(1,j),x(2,j),x(3,j)
+            !enddo
+            !write(*,*) atom2,m%xx%ind(atom2),m%yy%ind(atom2),m%zz%ind(atom2)
+            !do j=1,m%natoms
+            !    if(id(j) == atom2) write(*,*) j,x(1,j),x(2,j),x(3,j)
+            !enddo
+
             do j=1, cnatoms1-1
-                write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", cluster1(j), " x ", m%xx%ind(cluster1(j)), " y ", m%yy%ind(cluster1(j)), " z ", m%yy%ind(cluster1(j))
+                write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", cluster1(j), " x ", m%xx%ind(cluster1(j)), " y ", m%yy%ind(cluster1(j)), " z ", m%zz%ind(cluster1(j))
                 call lammps_command(lmp, trim(lmp_cmd_str))
             enddo
             do j=1, cnatoms2-1
                 write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", cluster2(j), " x ", m%xx%ind(cluster2(j)), " y ", m%yy%ind(cluster2(j)), " z ", m%zz%ind(cluster2(j))
                 call lammps_command(lmp, trim(lmp_cmd_str))
             enddo
+
             !if(m%znum%ind(atom1) .eq. 40) then
             !    temp = 1
             !else if( m%znum%ind(atom1) .eq. 29) then
@@ -310,7 +324,7 @@ endif
             !endif
             !write(lmp_cmd_str, "(A9, I4, A6, I1)") "set atom ", atom2, " type ", temp
             !call lammps_command(lmp, trim(lmp_cmd_str))
-            call lammps_command (lmp, 'minimize 1.0e-4 1.0e-6 100 1000')
+            call lammps_command (lmp, 'minimize 1.0e-4 1.0e-6 1000 1000')
             !call lammps_command (lmp, 'run 1000')
             !call lammps_command (lmp, 'minimize 1.0e-4 1.0e-6 100 1000')
             call lammps_extract_compute (te2, lmp, 'pot', 0, 0)
