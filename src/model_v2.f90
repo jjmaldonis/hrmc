@@ -378,6 +378,110 @@ contains
         !enddo
     end subroutine check_model
 
+    subroutine rotate_atom(phi, psi, theta, min, mrot, istat)
+        ! rotates model min by angles phi, psi, theta and puts the results in mrot. min is unchanged.
+        ! min should be a single atom model.
+        real, intent(in) :: theta, phi, psi
+        type(model), intent(in) :: min
+        type(model), intent(inout) :: mrot 
+        integer, intent(out) :: istat
+        real, dimension(3,3) :: r                         ! rotation matrix
+        real :: cpsi, cphi, ctheta, sphi, spsi, stheta    ! sines and cosines of the angles
+        integer :: i, j                                   ! loop counters
+        real :: x, y, z                                   ! temporary positions
+        real :: lx2, ly2, lz2                             ! half box sizes
+        type(model) :: mt                                 ! temporary oversize model
+        
+        ! periodic continue mt to 3x3x3 of the original model
+        istat = 0
+        call periodic_continue_model(3, 3, 3, min, mt, .FALSE., istat)
+        if (istat /= 0) return
+
+        ! generate the members of a 3x3 rotation matrix.  Use the Goldstein "x-convention"
+        ! and Euler angles phi theta, psi.
+        !write(*,*) "Rotation angles:", phi, psi, theta
+        cpsi = cos(psi)
+        cphi = cos(phi)
+        ctheta = cos(theta)
+        sphi = sin(phi)
+        spsi = sin(psi)
+        stheta = sin(theta)
+
+        !phi ignored - JWH 09/02/09
+        r(1,1) = cpsi
+        r(1,2) = spsi
+        r(1,3) = 0.0
+        r(2,1) = -ctheta*spsi
+        r(2,2) = ctheta*cpsi
+        r(2,3) = stheta
+        r(3,1) = stheta*spsi
+        r(3,2) = -stheta*cpsi
+        r(3,3) = ctheta
+
+        ! Rotate the position vectors in mt (the temporary 3x3x3 model).
+        do i=1,mt%natoms
+            if(abs(mt%xx%ind(i)).le.1.2*sqrt(2.0)*min%lx/2)then
+                if(abs(mt%yy%ind(i)).le.1.2*sqrt(2.0)*min%ly/2)then
+                    if(abs(mt%zz%ind(i)).le.1.2*sqrt(2.0)*min%lz/2)then
+                        x = mt%xx%ind(i)*r(1,1) + mt%yy%ind(i)*r(1,2) + mt%zz%ind(i)*r(1,3)
+                        y = mt%xx%ind(i)*r(2,1) + mt%yy%ind(i)*r(2,2) + mt%zz%ind(i)*r(2,3)
+                        z = mt%xx%ind(i)*r(3,1) + mt%yy%ind(i)*r(3,2) + mt%zz%ind(i)*r(3,3)
+                        mt%xx%ind(i) = x
+                        mt%yy%ind(i) = y
+                        mt%zz%ind(i) = z
+                    endif
+                endif
+            endif
+        end do
+
+        ! Cut the temporary model back to the original box size.
+        ! First count the atoms in the box.
+        mrot%natoms = 0
+        lx2 = min%lx / 2.0
+        ly2 = min%ly / 2.0
+        lz2 = min%lz / 2.0
+        do i=1, mt%natoms
+            if((mt%xx%ind(i) <= lx2 .AND. mt%xx%ind(i) >= -1.0*lx2) .and. &
+               (mt%yy%ind(i) <= ly2 .AND. mt%yy%ind(i) >= -1.0*ly2) .and. &
+               (mt%zz%ind(i) <= lz2 .AND. mt%zz%ind(i) >= -1.0*lz2)) then
+                mrot%natoms = mrot%natoms + 1
+            endif
+        enddo
+
+        mrot%unrot_natoms = min%natoms ! Better always be 1
+        mrot%xx%nat = mrot%natoms
+        mrot%yy%nat = mrot%natoms
+        mrot%zz%nat = mrot%natoms
+        mrot%znum%nat = mrot%natoms
+        mrot%znum_r%nat = mrot%natoms
+
+        ! now copy just the atoms inside the original box size 
+        ! from the temp model to the rotated one.
+        j=1
+        do i=1, mt%natoms
+            if (mt%xx%ind(i) <= lx2 .AND. mt%xx%ind(i) >= -1.0*lx2) then
+                if (mt%yy%ind(i) <= ly2 .AND. mt%yy%ind(i) >= -1.0*ly2) then
+                    if (mt%zz%ind(i) <= lz2 .AND. mt%zz%ind(i) >= -1.0*lz2) then
+                        mrot%xx%ind(j) = mt%xx%ind(i)
+                        mrot%yy%ind(j) = mt%yy%ind(i)
+                        mrot%zz%ind(j) = mt%zz%ind(i)
+                        mrot%znum%ind(j) = mt%znum%ind(i)
+                        mrot%znum_r%ind(j) = mt%znum_r%ind(i)
+                        !write(*,*)"here",i, mt%znum_r(i), mt%xx(i),mt%yy(i),mt%zz(i)
+                        ! add_index is basically just the general 
+                        ! "append(list, element)" function except 
+                        ! it takes a type object containing the list 
+                        ! and an int equal to its size.
+                        j = j+1
+                    endif
+                endif
+            endif
+        enddo
+
+        ! Release the memory allocated to mt
+        deallocate(mt%atom_type, mt%composition)
+        deallocate(mt%znum%ind,mt%znum_r%ind, mt%xx%ind, mt%yy%ind, mt%zz%ind)
+    end subroutine rotate_atom
 
     subroutine rotate_model(phi, psi, theta, min, mrot, istat)
         ! rotates model min by angles phi, psi, theta and puts the results in mrot. min is unchanged.
@@ -399,22 +503,6 @@ contains
         if (istat /= 0) return
 
         allocate(orig_indices(mt%natoms), stat=istat)
-        if (istat /= 0) then 
-           write (*,*) 'Memory allocation failure in rotate_model.'
-           return
-        endif
-
-        do i=1,mt%natoms   !Array loop was temporarily changed due to error in visual fortran - Jinwoo Hwang
-            if(mod(i,min%natoms) .eq. 0)then
-                orig_indices(i) = min%natoms
-            else
-                orig_indices(i) = mod(i,min%natoms)
-            endif
-            if((orig_indices(i) .gt. min%natoms) .or. (orig_indices(i) .lt. 1)) then
-                write(*,*) 'wrong here', i, orig_indices(i)
-            endif
-        enddo
-        !orig_indices = (/ (mod(i,min%natoms)+1, i=1,mt%natoms) /)
         orig_indices = (/ (mod(i,min%natoms)+1, i=0,mt%natoms-1) /) ! Jason 10-14-2013
 
         ! generate the members of a 3x3 rotation matrix.  Use the Goldstein "x-convention"
@@ -466,28 +554,8 @@ contains
                (mt%yy%ind(i) <= ly2 .AND. mt%yy%ind(i) >= -1.0*ly2) .and. &
                (mt%zz%ind(i) <= lz2 .AND. mt%zz%ind(i) >= -1.0*lz2)) then
                 mrot%natoms = mrot%natoms + 1
-            !else
-                !if(min%natoms /= 1425) write(*,*) "Atom outside world."
             endif
         enddo
-
-
-
-        !open(101,file="doubled_model.xyz",form='formatted',status='unknown')
-        !write(101,*) "doubled model"
-        !write(101,*) min%lx*2, min%ly*2, min%lz*2
-        !do i=1, mt%natoms
-        !    if((mt%xx%ind(i) <= lx2*2 .AND. mt%xx%ind(i) >= -1.0*lx2*2) .and. &
-        !       (mt%yy%ind(i) <= ly2*2 .AND. mt%yy%ind(i) >= -1.0*ly2*2) .and. &
-        !       (mt%zz%ind(i) <= lz2*2 .AND. mt%zz%ind(i) >= -1.0*lz2*2)) then
-        !    write(101,*) mt%znum%ind(i), mt%xx%ind(i), mt%yy%ind(i), mt%zz%ind(i)
-        !    endif
-        !enddo
-        !write(101,*) "-1"
-        !close(101)
-        !write(*,*) "WRITE DOUBLED MODEL COMPLETE."
-        !stop
-
 
         ! Allocate memory for the new atoms.
         mrot%unrot_natoms = min%natoms
@@ -523,21 +591,18 @@ contains
                         ! it takes a type object containing the list 
                         ! and an int equal to its size.
                         call add_index(mrot%rot_i(orig_indices(i)), j)
-!write(*,*) "Atom", orig_indices(i), "has rot_i=", mrot%rot_i(orig_indices(i))%ind
+                        !write(*,*) "Atom", orig_indices(i), "has rot_i=", mrot%rot_i(orig_indices(i))%ind
                         j = j+1
                     endif
                 endif
             endif
         enddo
 
-        !release the memory allocated to mt
-        !call destroy_model(mt)   ! pmv 04/17/09
-        ! I am assuming he commented out the above line and replaced it with the
-        ! two below because he never created the hutch array or rot_i for mt.
+        ! Release the memory allocated to mt
         deallocate(mt%atom_type, mt%composition)
         deallocate(mt%znum%ind,mt%znum_r%ind, mt%xx%ind, mt%yy%ind, mt%zz%ind)
 
-        ! set the rest of of the rotated model paramters
+        ! Set the rest of of the rotated model paramters
         mrot%lx = min%lx
         mrot%ly = min%ly
         mrot%lz = min%lz

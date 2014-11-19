@@ -34,6 +34,7 @@ module fem_mod
     double precision, save, dimension(:), allocatable :: int_sum, int_sq_sum  ! nk long sums of int and int_sq arrays for calculating V(k)
     real, save, allocatable, dimension(:) :: j0, A1                                               
     type(model), save, dimension(:), pointer, public :: mrot  ! array of rotated models
+    type(model), save, public :: rot_atom  ! used for rotating a single atom, overwritten every time
     type(model), save, dimension(:), pointer :: mcopy  ! array of rotated models
     type(index_list), save, dimension(:), pointer :: old_index
     type(pos_list), save, dimension(:), pointer :: old_pos 
@@ -56,7 +57,6 @@ contains
         real, dimension(:,:), pointer :: scatfact_e
         integer, intent(out) :: istat
         logical, intent(in) :: square_pixel
-        !real :: dr ! Distance between pixels
         real r_max, const1, const2, const3
         integer bin_max
         integer i, j 
@@ -64,12 +64,10 @@ contains
         double precision b_x, b_j0 , b_j1 
 
         if(square_pixel) then 
-            !r_max = SQRT(8.0) * res !diagonal in a square
             r_max = 2 * res !small pixel inscribed in Airy circle
         else 
             r_max = 2*res     !assuming resolution=radius
         endif
-        !r_max = 6*res  !Check how cut-off affect v, 05/11/2009
 
         bin_max = int(r_max/fem_bin_width)+1
 
@@ -96,35 +94,41 @@ contains
         j0(0)=1.0
 
         nk = nki
-        !pa%npix = pa%npix_1D*pa%npix_1D ! Jason commented on 20130722
-        !nrot = ntheta*nphi*npsi
 
         call init_rot(ntheta, nphi, npsi, nrot, istat)
-        !if (istat /= 0) return
         call init_pix(m, res, istat, square_pixel)
 
         allocate(int_i(nk, pa%npix, nrot), old_int(nk, pa%npix, nrot), old_int_sq(nk, pa%npix, nrot), &
         int_sq(nk, pa%npix, nrot), int_sum(nk), int_sq_sum(nk), int_i_as(nk, pa%npix, nrot), &
         int_as_sq(nk, pa%npix, nrot), stat=istat)
-        !if(allocated(old_index)) deallocate(old_index)
-        !if(associated(old_pos)) deallocate(old_pos)
-        !nullify(old_index, old_pos)
-        if (istat /= 0) then
-            write (*,*) 'Cannot allocate memory in fem_initialize.'
-            return
-        endif
+        call check_allocation(istat, 'Problem allocating memory in fem_initialize.')
 
-        !if (istat /= 0) return
+        ! Allocate memory for rot_atom model.
+        rot_atom%lx = m%lx
+        rot_atom%ly = m%ly
+        rot_atom%lz = m%lz
+        rot_atom%rotated = .TRUE.
+        rot_atom%unrot_natoms = 1
+        rot_atom%natoms = 0
+        ! Allocating space for 10 duplicates -- there will *never* be that many
+        ! rot_i should never be used so I wont allocate or deal with it.
+        allocate(rot_atom%xx%ind(10), rot_atom%yy%ind(10), rot_atom%zz%ind(10), &
+            rot_atom%znum%ind(10), rot_atom%znum_r%ind(10), stat=istat)
+            !rot_atom%znum%ind(10), rot_atom%rot_i(rot_at10), rot_atom%znum_r%ind(10), stat=istat)
+        rot_atom%xx%nat = rot_atom%natoms
+        rot_atom%yy%nat = rot_atom%natoms
+        rot_atom%zz%nat = rot_atom%natoms
+        rot_atom%znum%nat = rot_atom%natoms
+        rot_atom%znum_r%nat = rot_atom%natoms
+        call check_allocation(istat, 'Problem allocating memory in fem_initialize.')
+
         if( mod(m%lx,pa%phys_diam) >= 0.001 ) then
             write(0,*) "WARNING! Your world size should be an integer multiple of the resolution. Pixel diameter = ", pa%phys_diam, ". World size = ", m%lx
         endif
 
         call read_f_e
         allocate(scatfact_e(m%nelements,nk), stat=istat)
-        if (istat /= 0) then
-            write (*,*) 'Allocation of electron scattering factors table failed.'
-            return
-        endif
+        call check_allocation(istat, 'Allocation of electron scattering factors table failed.')
 
         do j=1,m%nelements
             do i=1, nk
@@ -584,7 +588,7 @@ contains
         type(model), intent(inout) :: m_int
         real, intent(in) :: res, px, py
         real, dimension(nk), intent(in) :: k
-        double precision, dimension(nk), intent(out) :: int_i, int_i_as
+        double precision, dimension(nk), intent(inout) :: int_i, int_i_as
         real, dimension(:,:), pointer :: scatfact_e
         integer, intent(out) :: istat
         logical, intent(in) :: square_pixel
@@ -879,10 +883,12 @@ contains
     end subroutine intensity
 
 
-    subroutine move_atom_in_rotated_model(atom,rot_atom,mroti,i)
+    subroutine move_atom_in_rotated_model(atom,mroti,i)
+        ! WARNING! rot_atom is implicitly used in this function.
+        ! It is basically a mandatory parameter, and needs to be 
+        ! updated correctly BEFORE calling this function.
         implicit none
         integer, intent(in) :: atom
-        type(model), intent(in) :: rot_atom
         type(model), intent(inout) :: mroti
         integer, intent(in) :: i
         integer :: j
@@ -893,9 +899,9 @@ contains
         ! same number of times as before.
             do j=1,rot_atom%natoms
                 ! Function ref: move_atom(m, atom, new_xx, new_yy, new_zz)
-!write(*,*) "Atom", mroti%rot_i(atom)%ind(j), " !==!", atom, "simply moved positions in model", mroti%id
-!write(*,*) "Atom", mroti%rot_i(atom)%ind(j), " !==!", atom, "simply moved positions. It's moving from", mroti%xx%ind(mroti%rot_i(atom)%ind(j)),  mroti%yy%ind(mroti%rot_i(atom)%ind(j)), mroti%zz%ind(mroti%rot_i(atom)%ind(j)), "to", rot_atom%xx%ind(j), rot_atom%yy%ind(j), rot_atom%zz%ind(j)
-!write(*,*) "Its current (old) rot_i=", mroti%rot_i(atom)%ind
+                !write(*,*) "Atom", mroti%rot_i(atom)%ind(j), " !==!", atom, "simply moved positions in model", mroti%id
+                !write(*,*) "Atom", mroti%rot_i(atom)%ind(j), " !==!", atom, "simply moved positions. It's moving from", mroti%xx%ind(mroti%rot_i(atom)%ind(j)),  mroti%yy%ind(mroti%rot_i(atom)%ind(j)), mroti%zz%ind(mroti%rot_i(atom)%ind(j)), "to", rot_atom%xx%ind(j), rot_atom%yy%ind(j), rot_atom%zz%ind(j)
+                !write(*,*) "Its current (old) rot_i=", mroti%rot_i(atom)%ind
                 call move_atom(mroti, mroti%rot_i(atom)%ind(j), &
                 rot_atom%xx%ind(j), rot_atom%yy%ind(j), rot_atom%zz%ind(j) )
             enddo
@@ -906,15 +912,15 @@ contains
             ! the number of atoms was changed.
             old_index(i)%nat = -1
             
-!write(*,*) "Atom", atom, "increased the number of times it occurs in model", mroti%id
-!write(*,*) "Its current (old) rot_i=", mroti%rot_i(atom)%ind
+            !write(*,*) "Atom", atom, "increased the number of times it occurs in model", mroti%id
+            !write(*,*) "Its current (old) rot_i=", mroti%rot_i(atom)%ind
 
             ! The atom positions in the rotated model (not atom) should
             ! be updated *up to the number of times it appeared in the
             ! model before*. This saves deleting rot_i(atom) and
             ! re-implementing it, as well as all the atoms it points to.
             do j=1,mroti%rot_i(atom)%nat
-!write(*,*) "Moving", mroti%rot_i(atom)%ind(j), "from", mroti%xx%ind(mroti%rot_i(atom)%ind(j)),  mroti%yy%ind(mroti%rot_i(atom)%ind(j)), mroti%zz%ind(mroti%rot_i(atom)%ind(j)), "to", rot_atom%xx%ind(j), rot_atom%yy%ind(j), rot_atom%zz%ind(j)
+            !write(*,*) "Moving", mroti%rot_i(atom)%ind(j), "from", mroti%xx%ind(mroti%rot_i(atom)%ind(j)),  mroti%yy%ind(mroti%rot_i(atom)%ind(j)), mroti%zz%ind(mroti%rot_i(atom)%ind(j)), "to", rot_atom%xx%ind(j), rot_atom%yy%ind(j), rot_atom%zz%ind(j)
                 call move_atom(mroti, mroti%rot_i(atom)%ind(j), &
                 rot_atom%xx%ind(j), rot_atom%yy%ind(j), rot_atom%zz%ind(j) )
             enddo
@@ -923,7 +929,7 @@ contains
             ! haven't gotten to yet.
             do j=mroti%rot_i(atom)%nat+1, rot_atom%natoms
                 call add_atom(mroti, atom, rot_atom%xx%ind(j), rot_atom%yy%ind(j), rot_atom%zz%ind(j), rot_atom%znum%ind(j), rot_atom%znum_r%ind(j) )
-!write(*,*) "Added to", mroti%xx%ind(mroti%rot_i(atom)%ind(j)),  mroti%yy%ind(mroti%rot_i(atom)%ind(j)), mroti%zz%ind(mroti%rot_i(atom)%ind(j))
+                !write(*,*) "Added to", mroti%xx%ind(mroti%rot_i(atom)%ind(j)),  mroti%yy%ind(mroti%rot_i(atom)%ind(j)), mroti%zz%ind(mroti%rot_i(atom)%ind(j))
             enddo
 
         else if( mroti%rot_i(atom)%nat .gt. rot_atom%natoms ) then
@@ -932,8 +938,8 @@ contains
             ! the number of atoms was changed.
             old_index(i)%nat = -1
         
-!write(*,*) "Atom", atom, "decreased the number of times it occurs in model", mroti%id
-!write(*,*) "Its current (old) rot_i=", mroti%rot_i(atom)%ind
+            !write(*,*) "Atom", atom, "decreased the number of times it occurs in model", mroti%id
+            !write(*,*) "Its current (old) rot_i=", mroti%rot_i(atom)%ind
 
             ! First I want to sort the indices in mroti%rot_i(atom)
             ! so that when we delete an atom from this array we will
@@ -947,7 +953,7 @@ contains
             ! saves deleting rot_i(atom) and re-implementing it, as well
             ! as all the atoms it points to.
             do j=1,rot_atom%natoms
-!write(*,*) "Moving", mroti%rot_i(atom)%ind(j), "from", mroti%xx%ind(mroti%rot_i(atom)%ind(j)),  mroti%yy%ind(mroti%rot_i(atom)%ind(j)), mroti%zz%ind(mroti%rot_i(atom)%ind(j)), "to", rot_atom%xx%ind(j), rot_atom%yy%ind(j), rot_atom%zz%ind(j)
+            !write(*,*) "Moving", mroti%rot_i(atom)%ind(j), "from", mroti%xx%ind(mroti%rot_i(atom)%ind(j)),  mroti%yy%ind(mroti%rot_i(atom)%ind(j)), mroti%zz%ind(mroti%rot_i(atom)%ind(j)), "to", rot_atom%xx%ind(j), rot_atom%yy%ind(j), rot_atom%zz%ind(j)
                 call move_atom(mroti, mroti%rot_i(atom)%ind(j), &
                 rot_atom%xx%ind(j), rot_atom%yy%ind(j), rot_atom%zz%ind(j) )
             enddo
@@ -982,22 +988,16 @@ contains
         double precision, dimension(:), allocatable :: psum_int, psum_int_sq, sum_int, sum_int_sq !mpi
         double precision, dimension(:), allocatable :: psum_int_as, psum_int_as_sq, sum_int_as, sum_int_as_sq !mpi autoslice
         integer :: comm
-        type(model) :: moved_atom, rot_atom
+        type(model) :: moved_atom
         integer :: i, j, m, n, ntpix
         logical, dimension(:,:), allocatable :: update_pix
-        !integer, dimension(:,:), allocatable :: sorted_pix
-        !integer :: num_sorted_pix
         type(index_list) :: pix_il
 
         istat = 0
-
         allocate(update_pix(nrot,pa%npix),stat=istat)
         call check_allocation(istat, 'Cannot allocate memory for pixel update array in fem.')
         update_pix = .FALSE.
         call check_allocation(istat, 'Cannot allocate memory for pixel update array in fem.')
-        !allocate(sorted_pix(nrot*pa%npix,2),stat=istat)
-        !sorted_pix = 0
-        !num_sorted_pix = 0
 
         ! Create a new model (moved_atom) with only one atom in it and put the
         ! position etc of the moved atom into it.
@@ -1047,7 +1047,7 @@ contains
             enddo
 
             ! Rotate that moved_atom into rot_atom. moved_atom is unchanged.
-            call rotate_model(rot(i,1), rot(i, 2), rot(i, 3), moved_atom, rot_atom, istat)
+            call rotate_atom(rot(i,1), rot(i, 2), rot(i, 3), moved_atom, rot_atom, istat)
             ! Note that mrot is the array containing the rotated models with
             ! every atom in them; it is different than these. rot_atom now
             ! contains a model that needs to be incorporated into mrot(i) in the
@@ -1115,7 +1115,7 @@ contains
                 !do n=1, rot_atom%natoms
                 !    write(*,*) "  to  ", rot_atom%xx%ind(n), rot_atom%yy%ind(n), rot_atom%zz%ind(n)
                 !enddo
-                call move_atom_in_rotated_model(atom,rot_atom,mrot(i),i)
+                !call move_atom_in_rotated_model(atom,mrot(i),i)
                 !write(*,*) "Moved atom", atom, mrot(i)%rot_i(atom)%nat
                 !do n=1, mrot(i)%rot_i(atom)%nat
                 !    write(*,*) "  to  ", mrot(i)%xx%ind(mrot(i)%rot_i(atom)%ind(n)), mrot(i)%yy%ind(mrot(i)%rot_i(atom)%ind(n)), mrot(i)%zz%ind(mrot(i)%rot_i(atom)%ind(n))
@@ -1132,29 +1132,7 @@ contains
 
             endif ! Test to see if (rot_atom%natoms == 0) .and. (mrot(i)%rot_i(atom)%nat == 0)
 
-            !call destroy_model(rot_atom) ! I might have a memory leak somewhere. I wonder if it is here.
-            !Deallocate ind in rot_atom%rot_i
-            do n=1, size(rot_atom%rot_i,1)
-                if(allocated(rot_atom%rot_i(n)%ind))then
-                    deallocate(rot_atom%rot_i(n)%ind)
-                endif
-            enddo
-            deallocate(rot_atom%xx%ind, rot_atom%yy%ind, rot_atom%zz%ind, &
-                rot_atom%znum%ind, rot_atom%rot_i, rot_atom%znum_r%ind, stat=istat)
-
         enddo rotations
-
-        !call mpi_reduce(update_pix, update_pix, nrot*pa%npix, mpi_logical, mpi_lor, 0, comm, mpierr)
-        !call mpi_bcast (update_pix, update_pix, nrot*pa%npix, mpi_logical, mpi_lor, 0, comm, mpierr)
-        !do i=1, nrot
-        !    do m=1, pa%npix
-        !        if(update_pix(i,m)) then
-        !            num_sorted_pix = num_sorted_pix + 1
-        !            sorted_pix(num_sorted_pix,0) = i
-        !            sorted_pix(num_sorted_pix,1) = m
-        !        endif
-        !    enddo
-        !enddo
 
         ! For debugging only.
         !ntpix = 0
@@ -1167,7 +1145,6 @@ contains
         !enddo
         !write(*,*) "Calling Intensity on ", ntpix, " pixels."
         !write(*,*) "Average number of pixels to call intensity on per model:", real(ntpix)/211.0
-        ! Update pixels if necessary.
 
         ! In this loop, 'i' is the model that has intensity called on it.
         do i=myid+1, nrot, numprocs
@@ -1178,8 +1155,7 @@ contains
                 ! might do 5 and another core might do 0.
                 if(update_pix(i,m)) then
                     !write(*,*) "Calling intensity in MC on pixel (", pa%pix(j,1), ",",pa%pix(j,2), ") in rotated model ", i, "with core", myid
-                    call intensity(mrot(i), res, pa%pix(m, 1), pa%pix(m, 2), k, &
-                        int_i(1:nk, m, i), int_i_as(1:nk, m, i), scatfact_e,istat, square_pixel, use_autoslice)
+                    call intensity(mrot(i), res, pa%pix(m, 1), pa%pix(m, 2), k, int_i(1:nk, m, i), int_i_as(1:nk, m, i), scatfact_e,istat, square_pixel, use_autoslice)
                     int_sq(1:nk, m, i) = int_i(1:nk, m, i)**2
                     if(use_autoslice) int_as_sq(1:nk, m, i) = int_i_as(1:nk, m, i)**2
                 endif
@@ -1209,12 +1185,6 @@ contains
 
         call mpi_barrier(comm, mpierr)
         call mpi_reduce (psum_int, sum_int, size(k), mpi_double, mpi_sum, 0, comm, mpierr)
-        !do i=1,numprocs
-        !    if(myid == i) then
-        !        write(*,*) "Core",myid,"Intensity:", psum_int
-        !    endif
-        !    call sleep(1)
-        !enddo
         call mpi_reduce (psum_int_sq, sum_int_sq, size(k), mpi_double, mpi_sum, 0, comm, mpierr)
         if(use_autoslice) call mpi_reduce (psum_int_as, sum_int_as, size(k), mpi_double, mpi_sum, 0, comm, mpierr)
         if(use_autoslice) call mpi_reduce (psum_int_as_sq, sum_int_as_sq, size(k), mpi_double, mpi_sum, 0, comm, mpierr)
@@ -1271,7 +1241,7 @@ contains
         real, intent(in) :: xx_cur, yy_cur, zz_cur
         integer :: i, j, istat
         integer :: comm
-        type(model) :: moved_atom, rot_atom
+        type(model) :: moved_atom
         !integer, intent(in) :: iii
 
         ! Create a new model (moved_atom) with only one atom in it and put the
@@ -1299,28 +1269,11 @@ contains
         do i=myid+1, nrot, numprocs
             !write(*,*) "Model", i, "has old_index%nat=", old_index(i)%nat
             if(.not. old_index(i)%nat == 0) then
-                ! If the move changed the number of atoms in the model, the model
-                ! must be re-rotated from scratch.
-                !if(old_index(i)%nat == -1) then
-                    !call destroy_model(mrot(i))
-                    !call copy_model(mcopy(i), mrot(i)) ! Added by Jason 20130731. Commented out rotate_model.
-                !else
 
-                call rotate_model(rot(i,1), rot(i, 2), rot(i, 3), moved_atom, rot_atom, istat)
-                call move_atom_in_rotated_model(atom,rot_atom,mrot(i),i)
+                call rotate_atom(rot(i,1), rot(i, 2), rot(i, 3), moved_atom, rot_atom, istat)
+                call move_atom_in_rotated_model(atom,mrot(i),i)
 
-
-                ! Otherwise, copy the old positions back into the model at the
-                ! correct indices.
-                !    do j=1,old_index(i)%nat
-                !        mrot(i)%xx%ind(old_index(i)%ind(j)) = old_pos(i)%pos(j,1)
-                !        mrot(i)%yy%ind(old_index(i)%ind(j)) = old_pos(i)%pos(j,2)
-                !        mrot(i)%zz%ind(old_index(i)%ind(j)) = old_pos(i)%pos(j,3)
-                !    enddo
-                !endif
-
-                !The saved intensity values must return to their old values - JWH
-                !03/05/09
+                ! The saved intensity values must return to their old values
                 do j=1, pa%npix
                     int_i(1:nk, j, i) = old_int(1:nk, j, i)
                     int_sq(1:nk, j, i) = old_int_sq(1:nk, j, i)
@@ -1328,7 +1281,6 @@ contains
             endif
         enddo
         call fem_reset_old(comm)
-        !if( iii > 30000) call checkers(m)
     end subroutine fem_reject_move
 
     subroutine checkers(m)
