@@ -38,10 +38,9 @@ program rmc
     character (len=256) :: model_filename
     character (len=256) :: param_filename
     character (len=256) :: eam_filename
-    character (len=256) :: outbase
     character (len=256) :: jobID, c, step_str
     character (len=512) :: comment
-    character (len=256) :: time_elapsed, vki_fn, vku_fn, vkf_fn, output_model_fn, energy_fn, final_model_fn, chi_squared_file, acceptance_rate_fn, beta_fn
+    character (len=256) :: time_elapsed, vki_fn, vkf_fn, output_model_fn, final_model_fn, chi_squared_file, acceptance_rate_fn
     real :: temperature
     real :: max_move
     real :: Q, res, alpha
@@ -69,6 +68,7 @@ program rmc
     real :: x! This is the parameter we will use to fit vsim to vas.
     integer, dimension(100) :: acceptance_array
     real :: avg_acceptance = 1.0
+    integer :: temp_move_decrement
 
     !------------------- Program setup. -----------------!
 
@@ -83,7 +83,6 @@ program rmc
     call mpi_comm_rank(mpi_comm_world, myid, mpierr)
     call mpi_comm_size(mpi_comm_world, numprocs, mpierr)
 
-    !call omp_set_num_threads(2)
     nthr = omp_get_max_threads()
     if(myid.eq.0)then
         write(*,*)
@@ -116,43 +115,31 @@ if(myid .eq. 0) then
     param_filename = trim(param_filename)
 
     ! Set output filenames.
-    outbase = ""
     write(time_elapsed, "(A12)") "time_elapsed"
     time_elapsed = trim(trim(time_elapsed)//jobID)//".txt"
     write(vki_fn, "(A10)") "vk_initial"
     vki_fn = trim(trim(vki_fn)//jobID)//".txt"
-    write(vku_fn, "(A9)") "vk_update"
-    vku_fn = trim(trim(vku_fn)//jobID)//".txt"
-    write(vkf_fn, "(A8)") "vk_final"
-    vkf_fn = trim(trim(vkf_fn)//jobID)//".txt"
-    write(output_model_fn, "(A12)") "model_update"
-    output_model_fn = trim(trim(output_model_fn)//jobID)//".txt"
     write(final_model_fn, "(A11)") "model_final"
     final_model_fn = trim(trim(final_model_fn)//jobID)//".txt"
-    write(energy_fn, "(A6)") "energy"
-    energy_fn = trim(trim(energy_fn)//jobID)//".txt"
     write(chi_squared_file, "(A11)") "chi_squared"
     chi_squared_file = trim(trim(chi_squared_file)//jobID)//".txt"
     write(acceptance_rate_fn, "(A15)") "acceptance_rate"
     acceptance_rate_fn = trim(trim(acceptance_rate_fn)//jobID)//".txt"
-    write(beta_fn, "(A14)") "beta_weighting"
-    beta_fn = trim(trim(beta_fn)//jobID)//".txt"
 endif
 
     !------------------- Read inputs and initialize. -----------------!
 
     ! Set input filenames.
-    !param_filename = 'param_file.in'
     call mpi_bcast(param_filename, 256, MPI_CHARACTER, 0, mpi_comm_world, mpierr)
-    if(myid.eq.0) write(*,*) "Paramfile:", trim(param_filename)
+    if(myid.eq.0) write(*,*) "Paramfile: ", trim(param_filename)
     
     ! Start timer.
     t0 = omp_get_wtime()
 
     ! Read input parameters
-    call read_inputs(param_filename,model_filename, eam_filename, step_start, temperature, max_move, cutoff_r, alpha, vk_exp, k, vk_exp_err, v_background, ntheta, nphi, npsi, scale_fac_initial, Q, status2)
-    temperature = temperature*(sqrt(0.7)**(step_start/200000))
-    max_move = max_move*(sqrt(0.94)**(step_start/200000))
+    call read_inputs(param_filename,model_filename, eam_filename, step_start, temp_move_decrement, temperature, max_move, cutoff_r, alpha, vk_exp, k, vk_exp_err, v_background, ntheta, nphi, npsi, scale_fac_initial, Q, status2)
+    temperature = temperature*(sqrt(0.7)**(step_start/temp_move_decrement))
+    max_move = max_move*(sqrt(0.94)**(step_start/temp_move_decrement))
 
     ! Read input model
     call read_model(model_filename, comment, m, istat)
@@ -396,22 +383,10 @@ endif
 
             ! Periodically save data.
             if(myid .eq. 0) then
-            if(mod(i,1000)==0)then
-                ! Write to vk_update ERROR HERE - if the most recent move was
-                ! rejected then this will print the incorrect vk. TODO
-                !write(vku_fn, "(A9)") "vk_update"
-                !write(step_str,*) i
-                !vku_fn = trim(trim(trim(trim(vku_fn)//jobID)//"_")//step_str)//".txt"
-                !open(32,file=trim(vku_fn),form='formatted',status='unknown')
-                !    do j=1, nk
-                !        write(32,*)k(j),vk(j)
-                !    enddo
-                !close(32)
-                ! Write to model_update
-                ! This takes a bit of time.
+            if(mod(i,1000)==0 .and. i .gt. step_start)then
                 write(output_model_fn, "(A12)") "model_update"
                 write(step_str,*) i
-                output_model_fn = trim(trim(trim(trim(output_model_fn)//jobID)//"_")//step_str)//".xyz"
+                output_model_fn = trim(trim(trim(trim(output_model_fn)//jobID)//"_")//adjustl(step_str))//".xyz"
                 open(33,file=trim(output_model_fn),form='formatted',status='unknown')
                     write(33,*)"updated model"
                     write(33,*)m%lx,m%ly,m%lz
@@ -420,20 +395,6 @@ endif
                     enddo
                     write(33,*)"-1"
                 close(33)
-                !do j=myid+1,nrot,numprocs
-                !    write(myid_str,*) j
-                !    !output_model_fn = trim(trim(trim(trim(trim(trim(output_model_fn)//jobID)//"_")//step_str)//"_")//myid_str)//".xyz"
-                !    output_model_fn = trim(trim("mrot_model")//trim(myid_str))
-                !    !write(*,*) trim(output_model_fn)
-                !    open(33,file=trim(output_model_fn),form='formatted',status='unknown')
-                !        write(33,*)"mrot model. rot=", j, "step=",i
-                !        write(33,*)m%lx,m%ly,m%lz
-                !        do ii=1,mrot(j)%natoms
-                !            write(33,*)mrot(j)%znum%ind(ii), mrot(j)%xx%ind(ii), mrot(j)%yy%ind(ii), mrot(j)%zz%ind(ii)
-                !        enddo
-                !        write(33,*)"-1"
-                !    close(33)
-                !enddo
             endif
             if(mod(i,1)==0)then
                 !if(accepted) then
@@ -460,8 +421,8 @@ endif
             endif
             endif ! myid == 0
 
-            ! Every 200,000 steps lower the temp, max_move, and reset beta.
-            if(mod(i,200000)==0 .and. i .ne. 0)then
+            ! Every 'temp_move_decrement' steps lower the temp, max_move, and reset beta.
+            if(mod(i,temp_move_decrement)==0 .and. i .ne. 0)then
                 temperature = temperature * sqrt(0.7)
                 if(myid.eq.0) write(*,*) "Lowering temp to", temperature, "at step", i
                 max_move = max_move * sqrt(0.94)
@@ -489,10 +450,6 @@ endif
                 write(55,*)m%znum%ind(i), m%xx%ind(i), m%yy%ind(i), m%zz%ind(i)
             enddo
             write(55,*)"-1"; close(55)
-            ! Write final energy.
-            open(56,file=trim(energy_fn),form='formatted', status='unknown',access='append')
-            write(56,*) i, te2
-            close(56)
 #ifdef TIMING
             ! Write final time spent.
             open(57,file=trim(time_elapsed),form='formatted',status='unknown',access='append')
