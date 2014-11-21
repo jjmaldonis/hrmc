@@ -1115,7 +1115,7 @@ contains
                 !do n=1, rot_atom%natoms
                 !    write(*,*) "  to  ", rot_atom%xx%ind(n), rot_atom%yy%ind(n), rot_atom%zz%ind(n)
                 !enddo
-                !call move_atom_in_rotated_model(atom,mrot(i),i)
+                call move_atom_in_rotated_model(atom,mrot(i),i)
                 !write(*,*) "Moved atom", atom, mrot(i)%rot_i(atom)%nat
                 !do n=1, mrot(i)%rot_i(atom)%nat
                 !    write(*,*) "  to  ", mrot(i)%xx%ind(mrot(i)%rot_i(atom)%ind(n)), mrot(i)%yy%ind(mrot(i)%rot_i(atom)%ind(n)), mrot(i)%zz%ind(mrot(i)%rot_i(atom)%ind(n))
@@ -1123,9 +1123,9 @@ contains
 
                 ! Error check!
                 do n=1, rot_atom%natoms
-                    if( rot_atom%xx%ind(n) .ne.  mrot(i)%xx%ind(mrot(i)%rot_i(atom)%ind(n)) ) write(*,*) "ERROR! x coord got moved wrong!"
-                    if( rot_atom%yy%ind(n) .ne.  mrot(i)%yy%ind(mrot(i)%rot_i(atom)%ind(n)) ) write(*,*) "ERROR! y coord got moved wrong!"
-                    if( rot_atom%zz%ind(n) .ne.  mrot(i)%zz%ind(mrot(i)%rot_i(atom)%ind(n)) ) write(*,*) "ERROR! z coord got moved wrong!"
+                    if( rot_atom%xx%ind(n) .ne.  mrot(i)%xx%ind(mrot(i)%rot_i(atom)%ind(n)) ) write(*,*) "ERROR! x coord moved wrong!", atom, rot_atom%xx%ind(n), mrot(i)%xx%ind(mrot(i)%rot_i(atom)%ind(n))
+                    if( rot_atom%yy%ind(n) .ne.  mrot(i)%yy%ind(mrot(i)%rot_i(atom)%ind(n)) ) write(*,*) "ERROR! y coord moved wrong!", atom, rot_atom%yy%ind(n), mrot(i)%yy%ind(mrot(i)%rot_i(atom)%ind(n))
+                    if( rot_atom%zz%ind(n) .ne.  mrot(i)%zz%ind(mrot(i)%rot_i(atom)%ind(n)) ) write(*,*) "ERROR! z coord moved wrong!", atom, rot_atom%zz%ind(n), mrot(i)%zz%ind(mrot(i)%rot_i(atom)%ind(n))
                     !write(*,*) rot_atom%xx%ind(n), rot_atom%yy%ind(n), rot_atom%zz%ind(n)
                     !write(*,*) mrot(i)%xx%ind(mrot(i)%rot_i(atom)%ind(n)), mrot(i)%yy%ind(mrot(i)%rot_i(atom)%ind(n)), mrot(i)%zz%ind(mrot(i)%rot_i(atom)%ind(n))
                 enddo

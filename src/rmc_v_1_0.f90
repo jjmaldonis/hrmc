@@ -47,7 +47,7 @@ program rmc
     real :: Q, res, alpha
     real, pointer, dimension(:) :: k
     double precision, pointer, dimension(:) :: vk, vk_exp, vk_exp_err, v_background, vk_as !vk_as is for autoslice/multislice (whatever it's called)
-    real, pointer, dimension(:,:) :: cutoff_r 
+    real, allocatable, dimension(:,:) :: cutoff_r 
     real, pointer, dimension(:,:) :: scatfact_e
     real :: xx_cur, yy_cur, zz_cur, xx_new, yy_new, zz_new
     real :: scale_fac, scale_fac_initial, beta
@@ -149,16 +149,15 @@ endif
     ! Start timer.
     t0 = omp_get_wtime()
 
-    ! Read input model
-    call read_model(trim(param_filename), model_filename, comment, m, istat)
-    call check_model(m, istat)
-    call recenter_model(0.0, 0.0, 0.0, m)
-
     ! Read input parameters
-    allocate(cutoff_r(m%nelements,m%nelements),stat=istat)
     call read_inputs(param_filename,model_filename, eam_filename, step_start, temperature, max_move, cutoff_r, alpha, vk_exp, k, vk_exp_err, v_background, ntheta, nphi, npsi, scale_fac_initial, Q, status2)
     temperature = temperature*(sqrt(0.7)**(step_start/200000))
     max_move = max_move*(sqrt(0.94)**(step_start/200000))
+
+    ! Read input model
+    call read_model(model_filename, comment, m, istat)
+    call check_model(m, istat)
+    call recenter_model(0.0, 0.0, 0.0, m)
 
     if(myid .eq. 0) then
     write(*,*) "Model filename: ", trim(model_filename)

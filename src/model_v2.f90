@@ -161,16 +161,15 @@ contains
     end subroutine sort
 
 
-    subroutine read_model(param_filename, model_filename, comment, m, istat)
+    subroutine read_model(model_filename, comment, m, istat)
     ! Reads a model in the Kirkland .xyz file format from the file model_filename.
     ! Puts the first-line comment in "comment", the model in m, and returns 0 in
     ! istat if the file cant be opened or the memory allocation fails.
     ! The subroutine composition_model has been incorporated into this
     ! subroutine by Jason on 06/28/13.
         implicit none
-        character (len=*),intent(in) :: param_filename!, model_filename
-        character (len=*),intent(inout) :: model_filename
-        character (LEN=*),intent(out) :: comment
+        character (len=*),intent(in) :: model_filename
+        character (len=*),intent(out) :: comment
         type(model), intent(out) :: m
         integer, intent(out) :: istat      !0 for successful open, others for failure.
         integer :: i, j, atom_count=0, nat=0, atom_temp
@@ -179,11 +178,6 @@ contains
 
         ! Set model ID to 0.
         m%id = 0
-
-        open(20, file=param_filename,iostat=istat, status='old')
-            read(20, '(a80)') comment !read comment from paramfile
-            read(20, '(a80)') model_filename; model_filename= adjustl(model_filename)
-        close(20)
 
         ! Open file that contains the model information.
         open(1,file=trim(model_filename),iostat=istat,status='old')

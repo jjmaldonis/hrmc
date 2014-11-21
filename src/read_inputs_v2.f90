@@ -25,12 +25,12 @@ contains
     !status2=whether param_filename is opened with success or not
 
         implicit none
-        character (len=*), intent(in) :: param_filename  !Assume size array, be careful
-        character (len=80), intent(out) :: model_fn, eam_file
+        character (len=256), intent(in) :: param_filename  !Assume size array, be careful
+        character (len=256), intent(out) :: model_fn, eam_file
         integer, intent(out) :: step_start
         real, intent(out) :: temperature
         real, intent(out) :: max_move
-        real, intent(out), dimension(:,:) :: cutoff_r
+        real, intent(out), dimension(:,:), allocatable :: cutoff_r
         real, intent(out) :: alpha
         real, pointer, dimension(:) :: k
         double precision, pointer, dimension(:) :: v, v_err, v_background
@@ -38,12 +38,13 @@ contains
         real, intent(out) :: q
         real, intent(out) :: scale_fac
         integer, intent(out) :: status2
+        integer :: nelements
 
         !Variables declared in this subroutine, local variables
         !comment1=comment in param_filename
-        character (len=80) comment1  
-        character (len=80) scatteringfile ! The scattering file name, at most 20 characters
-        character (len=80) femfile ! The fem data file name, at most 20 characters
+        character (len=256) comment1  
+        character (len=256) scatteringfile ! The scattering file name, at most 20 characters
+        character (len=256) femfile ! The fem data file name, at most 20 characters
             ! Note: electron, neutron, and x-ray data all use this name, but in order.
         integer filenamelength !The file name length in scatteringfile or femfile
         integer i
@@ -60,21 +61,21 @@ contains
             print *, 'cannot open file with name: ', param_filename
             return
         endif
-        read(20, '(a80)') comment1 !read comment and it is neglected in the input
-        read(20, '(a80)') model_fn; model_fn = adjustl(model_fn)
-        read(20, '(a80)') femfile; femfile= adjustl(femfile)
-        read(20, '(a80)') eam_file; eam_file= adjustl(eam_file)
+        read(20, '(A256)') comment1 !read comment and it is neglected in the input
+        read(20, '(A256)') model_fn; model_fn = adjustl(model_fn)
+        read(20, '(A256)') femfile; femfile= adjustl(femfile)
+        read(20, '(A256)') eam_file; eam_file= adjustl(eam_file)
         read(20, *) step_start
         read(20, *) temperature
         read(20, *) max_move
-        read(20, * ) !commented line
+        read(20, * ) nelements
+        allocate(cutoff_r(nelements,nelements))
         read(20, *) cutoff_r ! This is a nelements by nelements matrix
-
         read(20, *) alpha
-        !read(20, *) weights(i)
         read(20, *) scale_fac
         read(20, *) nphi, npsi, ntheta
         read(20, *) q
+        close(20)
 
         num_line = 0
         filenamelength=len_trim(femfile)
@@ -121,7 +122,6 @@ contains
             print *, 'open fem file fails', femfile(1:filenamelength)
         endif
         close(30)
-        close(20)
     end subroutine read_inputs
 
 end module readinputs
