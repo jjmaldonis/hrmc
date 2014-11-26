@@ -2,31 +2,55 @@
 Lines below start with the line number in the parameter file. See param_file.in for an example. All necessary values will be encased in <> below with a description of each further below.
 
 1 A comment line. It doesn't matter what, just make sure it's there.
+
 2 \<modelfile>
+
 3 \<v(k) file>
+
 4 \<eam potential>
+
 5 \<starting step #> <how often to decrement temp and max move>
+
 6 \<starting temperature>
+
 7 \<starting maxmove>
+
 8 \<number of elements in the model>
+
 9-... \<hard sphere cutoff distances>
+
 10 \<alpha>
+
 11 \<thickness scaling factor>
+
 12 \<rotations, three values>
+
 13 \<Q>
 
-* \<modelfile>:  The starting modelfile for the HRMC simulation. The format is not the standard xyz file format, see examples included in repo.
+\<modelfile>:  The starting modelfile for the HRMC simulation. The format is not the standard xyz file format, see examples included in repo.
+
 \<v(k) file>:  The experimental V(k) data to fit against. See examples included in repo for formatting.
+
 \<eam potential>:  An EAM potential file for energy calculations.
+
 \<starting step #>:  The starting step # to be output in the chi_squared.txt file. For easy of graphing.
+
 \<how often to decrement temp and max move>:  The number of steps between decreasing the temperature and maximum move distance for simulated annealing. I set this to approximately 1/20 of the final simulation # of steps. You can calculate a cooling rate with respect to this and gauge whether you are cooling too quickly or not. You want to be able to explore as much of the potential energy landscape as you can bear (time is always an issue).
+
 \<starting temperature>:  The starting temperature, assuming the step # is 0. Do not modify this if you are continuing a simulation -- just make sure your starting step # is correct.
+
 \< starting maxmove>:  The starting maximum move distance an atom is allowed to move, , assuming the step # is 0. Do not modify this if you are continuing a simulation -- just make sure your starting step # is correct.
+
 \<number of elements in the model>:  Self explanitory.
+
 \<hard sphere cutoff distances>:  This will be a series of (# of elements) x (# of elements) lines that contains the hard-sphere cutoff distances you want to use. No atom move is allowed that puts atoms of specific types closer together than this. Different values can be input for specific atomic species pairs. The order from left to right and top to bottom should be printed shortly after the simulation begins (that should be correct).
+
 \<alpha>:  See description below. This deserves its own heading.
+
 \<thickness scaling factor>:  The ratio of the experimental sample thickness to the model thickness, multiplied by 3. The 3 accounts for approximations in the experimental data simulation algorithm.
+
 \<rotations, three values>:  Three values for determining how to rotate the primary model for calculations of V(k). Use 1 40 20, or read more below.
+
 \<Q>:  Q = 0.61/(FEM experimental resolution). Make sure the units match those in the modelfile. Use Angstroms.
 
 ### Other notable parameters not in the parameter file
