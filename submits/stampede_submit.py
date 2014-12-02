@@ -25,7 +25,7 @@ def submit_job(paramfile, prev_jobid, s, ds, modelfile):
 
     # Call sed to change modelfile if modelfile was given
     if(modelfile != None):
-        args = "sed -i '2s/.*/model_final_{0}.txt/' {1}".format(prev_jobid,paramfile)
+        args = "sed -i '2s/.*/model_final_{0}.xyz/' {1}".format(prev_jobid,paramfile)
         pcomm = run_subproc(args)
 
     # Do the submitting
