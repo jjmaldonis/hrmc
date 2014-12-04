@@ -2,14 +2,13 @@
 pei/Zr50Cu35Al15_start.xyz
 pei/fem_exp_Zr54Cu38Al8_t3.txt
 ZrCuAl2011.eam.alloy
-0 50000  !startingstep, how often we decrement temp and max move
-50.0    !starting temperature (assuming starting step is 1, not what you set it at)
-1.5    !maximum move distance (assuming the same thing)
-3
+0 5000000       # starting step, ending step
+30.0 1.5 50000  # starting temp (assuming s=0), starting max_move, how often we decrement both
+3               # number of atomic species
 2.272 2.272 2.272
 2.272 2.272 2.272
 2.272 2.272 2.272
-0.0256	 !weight of fem; alpha
-28.6378  !scaling factor for exp Vk; beta
-1 40 20 	 !# of rotations(nphi, npsi, ntheta) 1 40 20
-0.0305 !Q (inverse angstrom)
+0.0256	        # weighting factor between E and chi2
+28.6378         # thickness scaling factor
+1 40 20     	# of rotations(nphi, npsi, ntheta), use 1 40 20
+0.0305          # Q (inverse angstrom)

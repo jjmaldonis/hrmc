@@ -52,7 +52,7 @@ program rmc
     real :: scale_fac, scale_fac_initial, beta
     double precision :: chi2_old, chi2_new, del_chi, chi2_gr, chi2_vk, chi2_no_energy, chi2_initial
     real :: R
-    integer :: i, j, step_start
+    integer :: i, j, step_start, step_end
     integer :: w
     integer :: nk
     integer :: ntheta, nphi, npsi
@@ -139,7 +139,7 @@ endif
     t0 = omp_get_wtime()
 
     ! Read input parameters
-    call read_inputs(param_filename,model_filename, eam_filename, step_start, temp_move_decrement, temperature, max_move, cutoff_r, alpha, vk_exp, k, vk_exp_err, v_background, ntheta, nphi, npsi, scale_fac_initial, Q, status2)
+    call read_inputs(param_filename,model_filename, eam_filename, step_start, step_end, temp_move_decrement, temperature, max_move, cutoff_r, alpha, vk_exp, k, vk_exp_err, v_background, ntheta, nphi, npsi, scale_fac_initial, Q, status2)
     temperature = temperature*(sqrt(0.7)**(step_start/temp_move_decrement))
     max_move = max_move*(sqrt(0.94)**(step_start/temp_move_decrement))
 
@@ -225,11 +225,13 @@ endif
             write(*,*)
             write(*,*) "Initialization complete. Starting Monte Carlo."
             write(*,*) "Initial Conditions:"
-            write(*,*) "   Step =       ", i
-            write(*,*) "   Energy =     ", te1
-            write(*,*) "   LSqF V(k) =  ", chi2_no_energy
-            write(*,*) "   Temperature =", temperature
-            write(*,*) "   Max Move=", max_move
+            write(*,*) "   Step start =       ", i
+            write(*,*) "   Step end =         ", step_end
+            write(*,*) "   Decrement # =      ", temp_move_decrement
+            write(*,*) "   Energy =           ", te1
+            write(*,*) "   LSqF V(k) =        ", chi2_no_energy
+            write(*,*) "   Temperature =      ", temperature
+            write(*,*) "   Max Move=          ", max_move
             write(*,*)
             ! Reset time_elapsed, energy_function, chi_squared_file
 #ifdef TIMING
@@ -251,7 +253,7 @@ endif
 
         t0 = omp_get_wtime()
         ! RMC loop begins. The loop never stops.
-        do while (i .lt. step_start+400000)
+        do while (i .lt. step_end)
 #ifdef TIMING
             t2 = omp_get_wtime()
 #endif

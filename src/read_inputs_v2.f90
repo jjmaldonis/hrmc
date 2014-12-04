@@ -7,7 +7,7 @@ module ReadInputs
 
 contains
 
-    subroutine read_inputs(param_filename, model_fn, eam_file, step_start, temp_move_decrement, temperature, max_move, cutoff_r, alpha, V, k, V_err, V_background, ntheta, nphi, npsi, scale_fac, Q, status2)
+    subroutine read_inputs(param_filename, model_fn, eam_file, step_start, step_end, temp_move_decrement, temperature, max_move, cutoff_r, alpha, V, k, V_err, V_background, ntheta, nphi, npsi, scale_fac, Q, status2)
 
     !param_filename=input file name containing initilizing parameters
     !temperature=beginning temperature for RMC
@@ -27,7 +27,7 @@ contains
         implicit none
         character (len=256), intent(in) :: param_filename  !Assume size array, be careful
         character (len=256), intent(out) :: model_fn, eam_file
-        integer, intent(out) :: step_start, temp_move_decrement
+        integer, intent(out) :: step_start, step_end, temp_move_decrement
         real, intent(out) :: temperature
         real, intent(out) :: max_move
         real, intent(out), dimension(:,:), allocatable :: cutoff_r
@@ -65,9 +65,8 @@ contains
         read(20, '(A256)') model_fn; model_fn = adjustl(model_fn)
         read(20, '(A256)') femfile; femfile= adjustl(femfile)
         read(20, '(A256)') eam_file; eam_file= adjustl(eam_file)
-        read(20, *) step_start, temp_move_decrement
-        read(20, *) temperature
-        read(20, *) max_move
+        read(20, *) step_start, step_end
+        read(20, *) temperature, max_move, temp_move_decrement
         read(20, * ) nelements
         allocate(cutoff_r(nelements,nelements))
         read(20, *) cutoff_r ! This is a nelements by nelements matrix

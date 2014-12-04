@@ -9,23 +9,21 @@ Lines below start with the line number in the parameter file. See param_file.in 
 
 4 \<eam potential>
 
-5 \<starting step #> <how often to decrement temp and max move>
+5 \<starting step #> \<ending step #>
 
-6 \<starting temperature>
+6 \<starting temperature> \<starting maxmove> \<how often to decrement temp and max move>
 
-7 \<starting maxmove>
+7 \<number of elements in the model>
 
-8 \<number of elements in the model>
+8-... \<hard sphere cutoff distances>
 
-9-... \<hard sphere cutoff distances>
+9 \<alpha>
 
-10 \<alpha>
+10 \<thickness scaling factor>
 
-11 \<thickness scaling factor>
+11 \<rotations, three values>
 
-12 \<rotations, three values>
-
-13 \<Q>
+12 \<Q>
 
 \<modelfile>:  The starting modelfile for the HRMC simulation. The format is not the standard xyz file format, see examples included in repo.
 
@@ -35,11 +33,13 @@ Lines below start with the line number in the parameter file. See param_file.in 
 
 \<starting step #>:  The starting step # to be output in the chi_squared.txt file. For easy of graphing.
 
-\<how often to decrement temp and max move>:  The number of steps between decreasing the temperature and maximum move distance for simulated annealing. I set this to approximately 1/20 of the final simulation # of steps. You can calculate a cooling rate with respect to this and gauge whether you are cooling too quickly or not. You want to be able to explore as much of the potential energy landscape as you can bear (time is always an issue).
+\<ending step #>:  The job will run until this step number is hit.
 
 \<starting temperature>:  The starting temperature, assuming the step # is 0. Do not modify this if you are continuing a simulation -- just make sure your starting step # is correct.
 
 \< starting maxmove>:  The starting maximum move distance an atom is allowed to move, , assuming the step # is 0. Do not modify this if you are continuing a simulation -- just make sure your starting step # is correct.
+
+\<how often to decrement temp and max move>:  The number of steps between decreasing the temperature and maximum move distance for simulated annealing. I set this to approximately 1/20 of the final simulation # of steps. You can calculate a cooling rate with respect to this and gauge whether you are cooling too quickly or not. You want to be able to explore as much of the potential energy landscape as you can bear (time is always an issue).
 
 \<number of elements in the model>:  Self explanitory.
 
