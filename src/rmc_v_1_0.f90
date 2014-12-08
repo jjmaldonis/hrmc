@@ -253,7 +253,7 @@ endif
 
         t0 = omp_get_wtime()
         ! RMC loop begins. The loop never stops.
-        do while (i .lt. step_end)
+        do while (i .le. step_end)
 #ifdef TIMING
             t2 = omp_get_wtime()
 #endif
