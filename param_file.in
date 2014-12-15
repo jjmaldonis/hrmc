@@ -1,8 +1,8 @@
 #parameter file opened. set a filename to # to ignore it
 pei/Zr50Cu35Al15_start.xyz
-pei/fem_exp_Zr54Cu38Al8_t3.txt
+pei/fem_exp_Zr50Cu35Al15_t3.txt
 ZrCuAl2011.eam.alloy
-0 5000000       # starting step, ending step
+0 4000000       # starting step, ending step
 30.0 1.5 50000  # starting temp (assuming s=0), starting max_move, how often we decrement both
 3               # number of atomic species
 2.272 2.272 2.272
