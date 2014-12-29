@@ -395,7 +395,8 @@ endif
                     write(33,*)"updated model"
                     write(33,*)m%lx,m%ly,m%lz
                     do j=1,m%natoms
-                        write(33,'(I4, 3F18.14)') m%znum%ind(i), m%xx%ind(i), m%yy%ind(i), m%zz%ind(i)
+                        !write(33,'(I4, 3F18.14)') m%znum%ind(i), m%xx%ind(i), m%yy%ind(i), m%zz%ind(i)
+                        write(33,*) m%znum%ind(i), m%xx%ind(i), m%yy%ind(i), m%zz%ind(i)
                     enddo
                     write(33,*)"-1"
                 close(33)
@@ -451,7 +452,8 @@ endif
             write(55,*)"final model"
             write(55,*)m%lx,m%ly,m%lz
             do i=1,m%natoms
-                write(55,'(I4, 3F18.14)') m%znum%ind(i), m%xx%ind(i), m%yy%ind(i), m%zz%ind(i)
+                !write(55,'(I4, 3F18.14)') m%znum%ind(i), m%xx%ind(i), m%yy%ind(i), m%zz%ind(i)
+                write(55,*) m%znum%ind(i), m%xx%ind(i), m%yy%ind(i), m%zz%ind(i)
             enddo
             write(55,*)"-1"; close(55)
 #ifdef TIMING
