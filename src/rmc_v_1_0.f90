@@ -395,8 +395,8 @@ endif
                     write(33,*)"updated model"
                     write(33,*)m%lx,m%ly,m%lz
                     do j=1,m%natoms
-                        !write(33,'(I4, 3F18.14)') m%znum%ind(i), m%xx%ind(i), m%yy%ind(i), m%zz%ind(i)
-                        write(33,*) m%znum%ind(i), m%xx%ind(i), m%yy%ind(i), m%zz%ind(i)
+                        write(33,'(I4, 3F18.14)') m%znum%ind(j), m%xx%ind(j), m%yy%ind(j), m%zz%ind(j)
+                        !write(33,*) m%znum%ind(j), m%xx%ind(j), m%yy%ind(j), m%zz%ind(j)
                     enddo
                     write(33,*)"-1"
                 close(33)
