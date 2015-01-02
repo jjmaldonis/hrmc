@@ -402,12 +402,12 @@ endif
                 close(33)
             endif
             if(mod(i,1)==0)then
-                !if(accepted) then
+                if(accepted) then
                     ! Write chi2 info
                     open(36,file=trim(chi_squared_file),form='formatted',status='unknown',access='append')
                         write(36,*) i, chi2_no_energy, te2
                     close(36)
-                !endif
+                endif
             endif
 #ifdef TIMING
             if(mod(i,1)==0)then
