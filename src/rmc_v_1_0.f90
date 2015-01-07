@@ -395,8 +395,7 @@ endif
                     write(33,*)"updated model"
                     write(33,*)m%lx,m%ly,m%lz
                     do j=1,m%natoms
-                        write(33,'(I4, 3F18.14)') m%znum%ind(j), m%xx%ind(j), m%yy%ind(j), m%zz%ind(j)
-                        !write(33,*) m%znum%ind(j), m%xx%ind(j), m%yy%ind(j), m%zz%ind(j)
+                        write(33,'(I4, 3F20.14)') m%znum%ind(j), m%xx%ind(j), m%yy%ind(j), m%zz%ind(j)
                     enddo
                     write(33,*)"-1"
                 close(33)
@@ -437,7 +436,9 @@ endif
             i=i+1
 
         enddo !RMC do loop
+        if(myid.eq.0) then
         write(*,*) "Monte Carlo Finished!"
+        endif
 
         ! The rmc loop finished. Write final data.
         if(myid.eq.0)then
@@ -452,8 +453,7 @@ endif
             write(55,*)"final model"
             write(55,*)m%lx,m%ly,m%lz
             do i=1,m%natoms
-                !write(55,'(I4, 3F18.14)') m%znum%ind(i), m%xx%ind(i), m%yy%ind(i), m%zz%ind(i)
-                write(55,*) m%znum%ind(i), m%xx%ind(i), m%yy%ind(i), m%zz%ind(i)
+                write(55,'(I4, 3F20.14)') m%znum%ind(i), m%xx%ind(i), m%yy%ind(i), m%zz%ind(i)
             enddo
             write(55,*)"-1"; close(55)
 #ifdef TIMING
