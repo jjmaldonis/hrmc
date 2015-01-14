@@ -69,6 +69,18 @@ program rmc
     integer, dimension(100) :: acceptance_array
     real :: avg_acceptance = 1.0
     integer :: temp_move_decrement
+    character(3), dimension(118) :: syms
+
+    syms = (/ "H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne", "Na",  &
+    "Mg", "Al", "Si", "P", "S", "Cl", "Ar", "K", "Ca", "Sc", "Ti", "V",    &
+    "Cr", "Mn", "Fe", "Co", "Ni", "Cu", "Zn", "Ga", "Ge", "As", "Se", "Br",&
+    "Kr", "Rb", "Sr", "Y", "Zr", "Nb", "Mo", "Tc", "Ru", "Rh", "Pd", "Ag", &
+    "Cd", "In", "Sn", "Sb", "Te", "I", "Xe", "Cs", "Ba", "La", "Ce", "Pr", &
+    "Nd", "Pm", "Sm", "Eu", "Gd", "Tb", "Dy", "Ho", "Er", "Tm", "Yb", "Lu",&
+    "Hf", "Ta", "W", "Re", "Os", "Ir", "Pt", "Au", "Hg", "Tl", "Pb", "Bi", &
+    "Po", "At", "Rn", "Fr", "Ra", "Ac", "Th", "Pa", "U", "Np", "Pu", "Am", &
+    "Cm", "Bk", "Cf", "Es", "Fm", "Md", "No", "Lr", "Rf", "Db", "Sg", "Bh",&
+    "Hs", "Mt", "Ds", "Rg", "Cn", "Uut", "Fl", "Uup", "Lv", "Uus", "Uuo" /)
 
     !------------------- Program setup. -----------------!
 
@@ -392,10 +404,10 @@ endif
                 write(step_str,*) i
                 output_model_fn = trim(trim(trim(trim(output_model_fn)//jobID)//"_")//adjustl(step_str))//".xyz"
                 open(33,file=trim(output_model_fn),form='formatted',status='unknown')
-                    write(33,*)"updated model"
+                    write(33,*) m%natoms
                     write(33,*)m%lx,m%ly,m%lz
                     do j=1,m%natoms
-                        write(33,'(I4, 3F20.14)') m%znum%ind(j), m%xx%ind(j), m%yy%ind(j), m%zz%ind(j)
+                        write(33,'(A4, 3F20.14)') syms(m%znum%ind(j)), m%xx%ind(j), m%yy%ind(j), m%zz%ind(j)
                     enddo
                     write(33,*)"-1"
                 close(33)
@@ -450,10 +462,10 @@ endif
             close(54)
             ! Write final model
             open(unit=55,file=trim(final_model_fn),form='formatted',status='unknown')
-            write(55,*)"final model"
+            write(55,*) m%natoms
             write(55,*)m%lx,m%ly,m%lz
             do i=1,m%natoms
-                write(55,'(I4, 3F20.14)') m%znum%ind(i), m%xx%ind(i), m%yy%ind(i), m%zz%ind(i)
+                write(55,'(A4, 3F20.14)') syms(m%znum%ind(i)), m%xx%ind(i), m%yy%ind(i), m%zz%ind(i)
             enddo
             write(55,*)"-1"; close(55)
 #ifdef TIMING

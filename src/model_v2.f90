@@ -172,9 +172,22 @@ contains
         character (len=*),intent(out) :: comment
         type(model), intent(out) :: m
         integer, intent(out) :: istat      !0 for successful open, others for failure.
-        integer :: i, j, atom_count=0, nat=0, atom_temp
+        integer :: i, j, atom_count=0, atom_temp
         integer, dimension(103) :: elements=0
         real :: comp_temp
+        character(3) :: sym
+        character(3), dimension(118) :: syms
+
+        syms = (/ "H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne", "Na",  &
+        "Mg", "Al", "Si", "P", "S", "Cl", "Ar", "K", "Ca", "Sc", "Ti", "V",    &
+        "Cr", "Mn", "Fe", "Co", "Ni", "Cu", "Zn", "Ga", "Ge", "As", "Se", "Br",&
+        "Kr", "Rb", "Sr", "Y", "Zr", "Nb", "Mo", "Tc", "Ru", "Rh", "Pd", "Ag", &
+        "Cd", "In", "Sn", "Sb", "Te", "I", "Xe", "Cs", "Ba", "La", "Ce", "Pr", &
+        "Nd", "Pm", "Sm", "Eu", "Gd", "Tb", "Dy", "Ho", "Er", "Tm", "Yb", "Lu",&
+        "Hf", "Ta", "W", "Re", "Os", "Ir", "Pt", "Au", "Hg", "Tl", "Pb", "Bi", &
+        "Po", "At", "Rn", "Fr", "Ra", "Ac", "Th", "Pa", "U", "Np", "Pu", "Am", &
+        "Cm", "Bk", "Cf", "Es", "Fm", "Md", "No", "Lr", "Rf", "Db", "Sg", "Bh",&
+        "Hs", "Mt", "Ds", "Rg", "Cn", "Uut", "Fl", "Uup", "Lv", "Uus", "Uuo" /)
 
         ! Set model ID to 0.
         m%id = 0
@@ -183,34 +196,21 @@ contains
         open(1,file=trim(model_filename),iostat=istat,status='old')
         call check_allocation(istat, "Error in opening flie, "//model_filename)
 
-        read(1,*) ! Comment line.
-        read(1,*) ! This line contains the box size (lx, ly, lz).
-        ! Count how many atoms there are in the model.
-        do while( atom_count .ne. -1)
-            read(1,*) atom_count ! Read line.
-            nat=nat+1.0
-        enddo
-        nat=nat-1.0
-
-        rewind(1)
+        read(1,*) m%natoms
+        read(1,*) m%lx,m%ly,m%lz
 
         ! Set the number of atoms in the model m and allocate space for each
         ! coordinate.
-        m%natoms = nat
         ! Allocate the model to twice its necessary size so that we never have
         ! to reallocate ever.
-        allocate(m%xx%ind(nat*2), m%yy%ind(nat*2), m%zz%ind(nat*2), m%znum%ind(nat*2), stat=istat)
-        m%xx%nat = nat
-        m%yy%nat = nat
-        m%zz%nat = nat
-        m%znum%nat = nat
-        m%znum_r%nat = nat
+        allocate(m%xx%ind(m%natoms*2), m%yy%ind(m%natoms*2), m%zz%ind(m%natoms*2), m%znum%ind(m%natoms*2), stat=istat)
+        m%xx%nat = m%natoms
+        m%yy%nat = m%natoms
+        m%zz%nat = m%natoms
+        m%znum%nat = m%natoms
+        m%znum_r%nat = m%natoms
         call check_allocation(istat, 'Unable to allocate memory for the model being read.')
 
-        ! Read in the first 80 characters of the comment
-        read(1,'(a80)') comment
-        ! Read in the box size.
-        read(1,*) m%lx,m%ly,m%lz
         ! If the model is not a perfect cube then the rest of the calculations
         ! wont work, so we really should check that.
         if((m%lx /= m%ly) .or. (m%lx /= m%lz)) then
@@ -218,8 +218,11 @@ contains
             return
         endif
         ! Read the atomic numbers and atom positions directly into the model.
-        do i=1,nat
-            read(1,*) m%znum%ind(i),m%xx%ind(i),m%yy%ind(i),m%zz%ind(i)
+        do i=1,m%natoms
+            read(1,*) sym,m%xx%ind(i),m%yy%ind(i),m%zz%ind(i)
+            do j=1,118
+                if(sym .eq. syms(j)) m%znum%ind(i) = j
+            enddo
             ! If this atom has atomic number z, then increment the z position in
             ! the array elements. This counts the number of each atom type we have.
             elements(m%znum%ind(i)) = elements(m%znum%ind(i)) + 1
