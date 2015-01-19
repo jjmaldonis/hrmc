@@ -1,5 +1,5 @@
 #parameter file opened. set a filename to # to ignore it
-pei/Zr50Cu35Al15_start.xyz
+pei/Zr50Cu35Al15_start.real.xyz
 pei/fem_exp_Zr50Cu35Al15_t3.txt
 ZrCuAl2011.eam.alloy
 0 4000000       # starting step, ending step

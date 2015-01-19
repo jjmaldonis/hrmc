@@ -405,7 +405,7 @@ endif
                 output_model_fn = trim(trim(trim(trim(output_model_fn)//jobID)//"_")//adjustl(step_str))//".xyz"
                 open(33,file=trim(output_model_fn),form='formatted',status='unknown')
                     write(33,*) m%natoms
-                    write(33,*)m%lx,m%ly,m%lz
+                    write(33,'(3F20.14)')m%lx,m%ly,m%lz
                     do j=1,m%natoms
                         write(33,'(A4, 3F20.14)') syms(m%znum%ind(j)), m%xx%ind(j), m%yy%ind(j), m%zz%ind(j)
                     enddo
@@ -463,7 +463,7 @@ endif
             ! Write final model
             open(unit=55,file=trim(final_model_fn),form='formatted',status='unknown')
             write(55,*) m%natoms
-            write(55,*)m%lx,m%ly,m%lz
+            write(55,'(3F20.14)')m%lx,m%ly,m%lz
             do i=1,m%natoms
                 write(55,'(A4, 3F20.14)') syms(m%znum%ind(i)), m%xx%ind(i), m%yy%ind(i), m%zz%ind(i)
             enddo
