@@ -8,6 +8,7 @@ ZrCuAl2011.eam.alloy
 2.272 2.272 2.272
 2.272 2.272 2.272
 2.272 2.272 2.272
+10475           # seed
 0.0256	        # weighting factor between E and chi2
 28.6378         # thickness scaling factor
 1 40 20     	# of rotations(nphi, npsi, ntheta), use 1 40 20

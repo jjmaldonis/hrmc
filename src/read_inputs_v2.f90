@@ -7,7 +7,7 @@ module ReadInputs
 
 contains
 
-    subroutine read_inputs(param_filename, model_fn, eam_file, step_start, step_end, temp_move_decrement, temperature, max_move, cutoff_r, alpha, V, k, V_err, V_background, ntheta, nphi, npsi, scale_fac, Q, status2)
+    subroutine read_inputs(param_filename, model_fn, femfile, eam_file, step_start, step_end, temp_move_decrement, temperature, max_move, cutoff_r, iseed2, alpha, V, k, V_err, V_background, ntheta, nphi, npsi, scale_fac, Q, status2)
 
     !param_filename=input file name containing initilizing parameters
     !temperature=beginning temperature for RMC
@@ -27,10 +27,12 @@ contains
         implicit none
         character (len=256), intent(in) :: param_filename  !Assume size array, be careful
         character (len=256), intent(out) :: model_fn, eam_file
+        character (len=256), intent(inout) :: femfile ! The fem data file name, at most 20 characters
         integer, intent(out) :: step_start, step_end, temp_move_decrement
         real, intent(out) :: temperature
         real, intent(out) :: max_move
         real, intent(out), dimension(:,:), allocatable :: cutoff_r
+        integer, intent(out) :: iseed2
         real, intent(out) :: alpha
         real, pointer, dimension(:) :: k
         double precision, pointer, dimension(:) :: v, v_err, v_background
@@ -44,8 +46,6 @@ contains
         !comment1=comment in param_filename
         character (len=256) comment1  
         character (len=256) scatteringfile ! The scattering file name, at most 20 characters
-        character (len=256) femfile ! The fem data file name, at most 20 characters
-            ! Note: electron, neutron, and x-ray data all use this name, but in order.
         integer filenamelength !The file name length in scatteringfile or femfile
         integer i
         real indicator_end !Indicator_end=-1 means the end of file reaches
@@ -70,6 +70,7 @@ contains
         read(20, * ) nelements
         allocate(cutoff_r(nelements,nelements))
         read(20, *) cutoff_r ! This is a nelements by nelements matrix
+        read(20, *) iseed2
         read(20, *) alpha
         read(20, *) scale_fac
         read(20, *) nphi, npsi, ntheta

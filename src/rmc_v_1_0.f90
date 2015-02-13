@@ -40,7 +40,8 @@ program rmc
     character (len=256) :: eam_filename
     character (len=256) :: jobID, c, step_str
     character (len=512) :: comment
-    character (len=256) :: time_elapsed, vki_fn, vkf_fn, output_model_fn, final_model_fn, chi_squared_file, acceptance_rate_fn
+    character (len=256) :: time_elapsed, vki_fn, vkf_fn, output_model_fn, final_model_fn, chi_squared_file, acceptance_rate_fn, femfile
+    character (len=256) :: paramfile_restart
     real :: temperature
     real :: max_move
     real :: Q, res, alpha
@@ -139,6 +140,7 @@ if(myid .eq. 0) then
     chi_squared_file = trim(trim(chi_squared_file)//jobID)//".txt"
     write(acceptance_rate_fn, "(A15)") "acceptance_rate"
     acceptance_rate_fn = trim(trim(acceptance_rate_fn)//jobID)//".txt"
+    write(paramfile_restart, "(A16)") "param_restart.in"
 endif
 
     !------------------- Read inputs and initialize. -----------------!
@@ -151,7 +153,7 @@ endif
     t0 = omp_get_wtime()
 
     ! Read input parameters
-    call read_inputs(param_filename,model_filename, eam_filename, step_start, step_end, temp_move_decrement, temperature, max_move, cutoff_r, alpha, vk_exp, k, vk_exp_err, v_background, ntheta, nphi, npsi, scale_fac_initial, Q, status2)
+    call read_inputs(param_filename,model_filename, femfile, eam_filename, step_start, step_end, temp_move_decrement, temperature, max_move, cutoff_r, iseed2, alpha, vk_exp, k, vk_exp_err, v_background, ntheta, nphi, npsi, scale_fac_initial, Q, status2)
     temperature = temperature*(sqrt(0.7)**(step_start/temp_move_decrement))
     max_move = max_move*(sqrt(0.94)**(step_start/temp_move_decrement))
 
@@ -169,11 +171,11 @@ endif
     res = 0.61/Q
     nk = size(k)
     beta=1./((8.6171e-05)*temperature)
-    iseed2 = 104756
-    if(myid.eq.0) write(*,*) "random number generator seed =", iseed2
     square_pixel = .TRUE. ! RMC uses square pixels, not round.
-    use_rmc = .TRUE.
     use_multislice = .FALSE.
+    use_rmc = .TRUE.
+    if(trim(jobID) == '_femsim') use_rmc = .false.
+
 
 #ifdef USE_LMP
     call lammps_command (lmp, 'run 0')
@@ -270,6 +272,7 @@ endif
             t2 = omp_get_wtime()
 #endif
 
+            i=i+1
             if(myid .eq. 0) write(*,*) "Starting step", i
 
 #ifdef TIMING
@@ -443,9 +446,28 @@ endif
                 if(myid.eq.0) write(*,*) "Lowering temp to", temperature, "at step", i
                 max_move = max_move * sqrt(0.94)
                 beta=1./((8.6171e-05)*temperature)
+
+                ! Write to param_restart.in file
+                if(myid .eq. 0) then
+                    open(unit=53,file=trim(paramfile_restart),form='formatted',status='unknown')
+                        write(53,*) '# HRMC parameter file, generated to restart a sim ', trim(jobid(2:))
+                        write(53,*) trim(output_model_fn)
+                        write(53,*) trim(femfile)
+                        write(53,*) trim(eam_filename)
+                        write(53,*) step_start+i, step_end+i
+                        write(53,*) temperature, max_move, temp_move_decrement
+                        write(53,*) nelements
+                        do i=1,nelements
+                            write(53,*) cutoff_r(:,i)
+                        enddo
+                        write(53,*) iseed2
+                        write(53,*) alpha
+                        write(53,*) scale_fac_initial
+                        write(53,*) nphi, npsi, ntheta
+                        write(53,*) Q
+                    close(53)
+                endif
             endif
-            
-            i=i+1
 
         enddo !RMC do loop
         if(myid.eq.0) then
@@ -454,6 +476,24 @@ endif
 
         ! The rmc loop finished. Write final data.
         if(myid.eq.0)then
+            ! Write to param_restart.in file
+            open(unit=53,file=trim(paramfile_restart),form='formatted',status='unknown')
+                write(53,*) '# HRMC parameter file, generated to restart a sim ', trim(jobid(2:))
+                write(53,*) trim(final_model_fn)
+                write(53,*) trim(femfile)
+                write(53,*) trim(eam_filename)
+                write(53,*) step_start+i-1, step_end+i-1
+                write(53,*) temperature, max_move, temp_move_decrement
+                write(53,*) nelements
+                do i=1,nelements
+                    write(53,*) cutoff_r(:,i)
+                enddo
+                write(53,*) iseed2
+                write(53,*) alpha
+                write(53,*) scale_fac_initial
+                write(53,*) nphi, npsi, ntheta
+                write(53,*) Q
+            close(53)
             ! Write final vk
             open(unit=54,file=trim(vkf_fn),form='formatted',status='unknown')
             do i=1, nk
