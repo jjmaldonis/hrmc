@@ -457,8 +457,8 @@ endif
                         write(53,*) step_start+i, step_end+i
                         write(53,*) temperature, max_move, temp_move_decrement
                         write(53,*) nelements
-                        do i=1,nelements
-                            write(53,*) cutoff_r(:,i)
+                        do j=1,nelements
+                            write(53,*) cutoff_r(:,j)
                         enddo
                         write(53,*) iseed2
                         write(53,*) alpha
@@ -485,8 +485,8 @@ endif
                 write(53,*) step_start+i-1, step_end+i-1
                 write(53,*) temperature, max_move, temp_move_decrement
                 write(53,*) nelements
-                do i=1,nelements
-                    write(53,*) cutoff_r(:,i)
+                do j=1,nelements
+                    write(53,*) cutoff_r(:,j)
                 enddo
                 write(53,*) iseed2
                 write(53,*) alpha
