@@ -140,7 +140,7 @@ if(myid .eq. 0) then
     chi_squared_file = trim(trim(chi_squared_file)//jobID)//".txt"
     write(acceptance_rate_fn, "(A15)") "acceptance_rate"
     acceptance_rate_fn = trim(trim(acceptance_rate_fn)//jobID)//".txt"
-    write(paramfile_restart, "(A16)") "param_restart.in"
+    write(paramfile_restart, "(A16)") "param_resume.in"
 endif
 
     !------------------- Read inputs and initialize. -----------------!
@@ -397,7 +397,7 @@ endif
             endif
             if(i .ge. 100) avg_acceptance = sum(acceptance_array)/100.0
             ! Writing to 0 is stderr
-            if(i .ge. 100 .and. avg_acceptance .le. 0.05 .and. mod(i,100) .eq. 0) write(0,*) "WARNING!  Acceptance rate is low:", avg_acceptance
+            !if(i .ge. 100 .and. avg_acceptance .le. 0.05 .and. mod(i,100) .eq. 0) write(0,*) "WARNING!  Acceptance rate is low:", avg_acceptance
             endif
 
             ! Periodically save data.
@@ -447,14 +447,14 @@ endif
                 max_move = max_move * sqrt(0.94)
                 beta=1./((8.6171e-05)*temperature)
 
-                ! Write to param_restart.in file
+                ! Write to param_resume.in file
                 if(myid .eq. 0) then
                     open(unit=53,file=trim(paramfile_restart),form='formatted',status='unknown')
                         write(53,*) '# HRMC parameter file, generated to restart a sim ', trim(jobid(2:))
                         write(53,*) trim(output_model_fn)
                         write(53,*) trim(femfile)
                         write(53,*) trim(eam_filename)
-                        write(53,*) step_start+i, step_end+i
+                        write(53,*) step_start+i, step_end
                         write(53,*) temperature, max_move, temp_move_decrement
                         write(53,*) nelements
                         do j=1,nelements
@@ -476,7 +476,7 @@ endif
 
         ! The rmc loop finished. Write final data.
         if(myid.eq.0)then
-            ! Write to param_restart.in file
+            ! Write to param_resume.in file
             open(unit=53,file=trim(paramfile_restart),form='formatted',status='unknown')
                 write(53,*) '# HRMC parameter file, generated to restart a sim ', trim(jobid(2:))
                 write(53,*) trim(final_model_fn)

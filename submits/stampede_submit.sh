@@ -23,6 +23,8 @@
 
 echo "Date:"
 date
+echo "Github has:"
+git rev-parse --verify HEAD
 echo "Using Stampede."
 echo "JobID = $SLURM_JOB_ID"
 echo "Using $SLURM_NNODES nodes"

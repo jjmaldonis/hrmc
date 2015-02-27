@@ -18,6 +18,8 @@
 
 echo "Date:"
 date
+echo "Github has:"
+git rev-parse --verify HEAD
 echo "Using ACI / HCP / Slurm cluster."
 echo "JobID = $SLURM_JOB_ID"
 echo "Using $SLURM_NNODES nodes"
