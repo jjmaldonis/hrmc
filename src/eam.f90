@@ -33,6 +33,7 @@ contains
         real, dimension(:,:), allocatable  :: f_temp2
         real, dimension(:,:), allocatable  :: rho_temp2
         real, dimension(:,:,:), allocatable :: phi_temp2
+        real :: trash
         integer, dimension(:), allocatable :: reorder
         integer, dimension(:), allocatable :: atomic_numbers
         character (len=2), dimension(:), allocatable :: atom_syms
@@ -88,112 +89,35 @@ contains
         allocate(rho_temp2(nelements, nr))
         allocate(phi_temp2(nelements, nelements, nr))
 
-        line = 5
+        ! WARNING! You probably cannot use the potential file directly
+        ! that you downloaded. Rather, each number must be on a
+        ! separate line. Use util/reformat_potential.py to convert.
+
+        ! The elements in the eam file may not be in increasing
+        ! atomic order (which is how znumr is set up) so we need
+        ! to reorder if necessary. I set this up at the beginning.
         do i=1, nelements
-            line = line +1
             read(71,*) znum(i), mass(i), latt_const(i)
-            do j=1, nrho/5
-                line = line +1
-                read(71,*) f_temp(i, j, 1), f_temp(i, j, 2), f_temp(i, j, 3), f_temp(i, j, 4), f_temp(i, j, 5)
+            do j=1, nrho
+                read(71, *) f(reorder(i), j)
             enddo
-            do k=1, nr/5
-                line = line +1
-                !write(*,*)line, i, k
-                read(71,*) rho_temp(i, k, 1), rho_temp(i, k, 2), rho_temp(i, k, 3), rho_temp(i, k, 4), rho_temp(i, k, 5)
+            do j=1, nr
+                read(71, *) rho(reorder(i), j)
             enddo
         enddo
 
         do i=1, nelements
             do j=1, nelements
                 if(i.ge.j)then
-                    do k=1, nr/5
-                        line = line +1
-                        read(71,*) phi_temp(i, j, k, 1), phi_temp(i, j, k, 2), phi_temp(i, j, k, 3), phi_temp(i, j, k, 4),phi_temp(i, j, k, 5)
+                    do k=1, nr
+                        read(71, *) phi(reorder(i), reorder(j), k)
+                        phi(reorder(i), reorder(j), k) = phi(reorder(i), reorder(j), k)/(k*dr)
+                        phi(reorder(j), reorder(i), k) = phi(reorder(i), reorder(j), k)
                     enddo
                 endif
             enddo
         enddo
         close(71)
-
-        do i=1, nelements
-            do j=1, nelements
-                do k=1, nr/5
-                    do w=1, 5
-                        if(i.lt.j)then
-                            phi_temp(i, j, k, w)=phi_temp(j, i, k, w)
-                        endif
-                    enddo
-                enddo
-            enddo
-        enddo
-
-        do i=1, nelements
-            do j=1, nrho/5
-                do k=1, 5
-                    w=5*(j-1)+k
-                    f_temp2(i, w)=f_temp(i, j, k)
-                enddo
-            enddo
-        enddo
-
-        do i=1, nelements
-            do k=1, nr/5
-                do w=1, 5
-                    q=5*(k-1)+w
-                    rho_temp2(i, q)=rho_temp(i, k, w)
-                    do j=1, nelements
-                        phi_temp2(i, j, q)=phi_temp(i, j, k, w)
-                    enddo
-                enddo
-            enddo
-        enddo
-
-        do i=1, nelements
-            do j=1, nelements
-                do k=1, nr
-                    rr=(k*dr)
-                    phi_temp2(i,j,k) = phi_temp2(i,j,k)/rr
-                enddo
-            enddo
-        enddo
-
-        ! The elements in the eam file may not be in increasing
-        ! atomic order (which is how znumr is set up) so we need
-        ! to reorder if necessary. I set this up at the beginning.
-        do i=1, nelements
-            do j=1, nelements
-                do k=1, nr  
-                    phi(reorder(i), reorder(j), k) =  phi_temp2(i, j, k)
-                    rho(reorder(i), k) = rho_temp2(i, k)
-                enddo
-            enddo
-        enddo
-        do i=1, nelements
-            do j=1, nelements
-                do k=1, nrho
-                    f(reorder(i), k) = f_temp2(i, k)
-                enddo
-            enddo
-        enddo
-
-        !plotting
-        !open(unit=2,file="phi_zr.out",form='formatted',status='unknown')
-        !open(unit=3,file="rho_zr.out",form='formatted',status='unknown')
-        !open(unit=4,file="f_zr.out",form='formatted',status='unknown')
-
-        !do i=1, nr
-        !    rr=(i*dr)
-        !    write(2,*)rr, phi(1, 1, i)
-        !    write(3,*)rr, rho(1, i)
-        !enddo
-        !do i=1, nrho
-        !    rho1 = i*drho
-        !    write(4,*)rho1, f(1, i)
-        !enddo
-
-        !close(2)
-        !close(3)
-        !close(4)
 
         allocate(e1(m%natoms))
         allocate(e2(m%natoms))
