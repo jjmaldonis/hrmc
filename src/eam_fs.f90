@@ -7,7 +7,7 @@ module eam_mod
     use model_mod 
     implicit none
     real, dimension(:,:), pointer :: f
-    real, dimension(:,:), pointer :: rho
+    real, dimension(:,:,:), pointer :: rho
     real, dimension(:,:,:), pointer :: phi
     double precision, dimension(:), pointer :: e1, e2
     real :: drho, dr, eam_max_r
@@ -25,15 +25,7 @@ contains
         integer :: i, j, k, w, q, ii, jj
         integer, dimension(:), allocatable :: znum
         integer :: istat
-        real :: rr, rho1
         real, dimension(:), allocatable :: mass, latt_const
-        real, dimension(:,:,:), allocatable  :: f_temp
-        real, dimension(:,:,:), allocatable  :: rho_temp
-        real, dimension(:,:,:,:), allocatable :: phi_temp
-        real, dimension(:,:), allocatable  :: f_temp2
-        real, dimension(:,:), allocatable  :: rho_temp2
-        real, dimension(:,:,:), allocatable :: phi_temp2
-        real :: trash
         integer, dimension(:), allocatable :: reorder
         integer, dimension(:), allocatable :: atomic_numbers
         character (len=2), dimension(:), allocatable :: atom_syms
@@ -81,8 +73,8 @@ contains
         allocate(mass(nelements))
         allocate(latt_const(nelements))
         allocate(f(nelements, nrho))
-        allocate(rho(nelements, nr))
-        allocate(phi(nelements, nelements, nr+1))
+        allocate(rho(nelements, nelements, nr))
+        allocate(phi(nelements, nelements, nr))
 
         ! WARNING! You probably cannot use the potential file directly
         ! that you downloaded. Rather, each number must be on a
@@ -96,8 +88,13 @@ contains
             do k=1, nrho
                 read(71, *) f(reorder(i), k)
             enddo
-            do k=1, nr
-                read(71, *) rho(reorder(i), k)
+            do j=1, nelements
+                if(i.ge.j)then
+                    do k=1, nr
+                        read(71, *) rho(reorder(i), reorder(j), k)
+                        rho(reorder(j), reorder(i), k) = rho(reorder(i), reorder(j), k)
+                    enddo
+                endif
             enddo
         enddo
 
@@ -152,9 +149,9 @@ contains
                         r = sqrt(r2)
                         rbin = int(r/dr)+1
                         if(rbin == nr+1) rbin = rbin - 1 ! Jason due to out of bounds error. I believe this is the correct fix, and that the problem arrises due to a rounding error. 20130731
-                        phi1 = phi(m%znum_r%ind(i), m%znum_r%ind(atoms(j)) , rbin)
+                        phi1 = phi(m%znum_r%ind(i), m%znum_r%ind(atoms(j)), rbin)
                         phi2 = phi2 + phi1
-                        rho1 = rho(m%znum_r%ind(i), rbin)
+                        rho1 = rho(m%znum_r%ind(i), m%znum_r%ind(atoms(j)), rbin)
                         rho2 = rho2 + rho1
                     endif
                 endif
@@ -206,9 +203,9 @@ contains
                         r = sqrt(r2)
                         rbin = int(r/dr)+1
                         if(rbin == nr+1) rbin = rbin - 1 ! Jason due to out of bounds error. I believe this is the correct fix, and that the problem arrises due to a rounding error. 20130731
-                        phi1 = phi(m%znum_r%ind(i), m%znum_r%ind(j) , rbin)
+                        phi1 = phi(m%znum_r%ind(i), m%znum_r%ind(j), rbin)
                         phi2 = phi2 + phi1
-                        rho1 = rho(m%znum_r%ind(i), rbin)
+                        rho1 = rho(m%znum_r%ind(i), m%znum_r%ind(j), rbin)
                         rho2 = rho2 + rho1
                     endif
                 endif
@@ -264,9 +261,9 @@ contains
                         r = sqrt(r2)
                         rbin = int(r/dr)+1
                         if(rbin == nr+1) rbin = rbin - 1 ! Jason due to out of bounds error. I believe this is the correct fix, and that the problem arrises due to a rounding error. 20130731
-                        phi1 = phi(m%znum_r%ind(atoms1(i)), m%znum_r%ind(atoms2(j)) , rbin)
+                        phi1 = phi(m%znum_r%ind(atoms1(i)), m%znum_r%ind(atoms2(j)), rbin)
                         phi2 = phi2 + phi1
-                        rho1 = rho(m%znum_r%ind(atoms1(i)), rbin)
+                        rho1 = rho(m%znum_r%ind(atoms1(i)), m%znum_r%ind(atoms2(j)), rbin)
                         rho2 = rho2 + rho1
                     endif
                 endif
@@ -301,9 +298,9 @@ contains
                             r = sqrt(r2)
                             rbin = int(r/dr)+1
                             if(rbin == nr+1) rbin = rbin - 1 ! Jason due to out of bounds error. I believe this is the correct fix, and that the problem arrises due to a rounding error. 20130731
-                            phi1 = phi(m%znum_r%ind(atoms3(i)), m%znum_r%ind(atoms4(j)) , rbin)
+                            phi1 = phi(m%znum_r%ind(atoms3(i)), m%znum_r%ind(atoms4(j)), rbin)
                             phi2 = phi2 + phi1
-                            rho1 = rho(m%znum_r%ind(atoms3(i)), rbin)
+                            rho1 = rho(m%znum_r%ind(atoms3(i)), m%znum_r%ind(atoms4(j)), rbin)
                             rho2 = rho2 + rho1
                         endif
                     endif
