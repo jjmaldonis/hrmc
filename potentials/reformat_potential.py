@@ -1,4 +1,4 @@
-import sys, os
+import sys, os, re
 
 def reformat(f):
     of = 'reformatted/'+f
@@ -28,43 +28,17 @@ def reformat(f):
         dr = float(sline[3])
         cutoff = float(sline[4])
 
-        for elem in range(nelements):
-            line = input.readline()
-            output.write(line)
-            i = 0
-            while i < nrho:
-                line = input.readline().strip().split()
-                while '' in line:
-                    line.remove('')
-                #for num in [float(x) for x in line]:
-                    #output.write(str(num)+'\n')
+        line = 'holder'
+        while line != []:
+            line = input.readline().strip().split()
+            while '' in line:
+                line.remove('')
+            try:
+                [float(x) for x in line]
                 for num in line:
                     output.write(num+'\n')
-                    i += 1
-            i = 0
-            while i < nr:
-                line = input.readline().strip().split()
-                while '' in line:
-                    line.remove('')
-                #for num in [float(x) for x in line]:
-                    #output.write(str(num)+'\n')
-                for num in line:
-                    output.write(num+'\n')
-                    i += 1
-
-        for elem1 in range(nelements):
-            for elem2 in range(nelements):
-                if elem1 >= elem2:
-                    i = 0
-                    while i < nr:
-                        line = input.readline().strip().split()
-                        while '' in line:
-                            line.remove('')
-                        #for num in [float(x) for x in line]:
-                            #output.write(str(num)+'\n')
-                        for num in line:
-                            output.write(num+'\n')
-                            i += 1
+            except:
+                output.write(' '.join(line) + '\n')
 
 
 def main():
