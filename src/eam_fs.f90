@@ -89,12 +89,10 @@ contains
                 read(71, *) f(reorder(i), k)
             enddo
             do j=1, nelements
-                if(i.ge.j)then
-                    do k=1, nr
-                        read(71, *) rho(reorder(i), reorder(j), k)
-                        rho(reorder(j), reorder(i), k) = rho(reorder(i), reorder(j), k)
-                    enddo
-                endif
+                do k=1, nr
+                    read(71, *) rho(reorder(i), reorder(j), k)
+                    rho(reorder(j), reorder(i), k) = rho(reorder(i), reorder(j), k)
+                enddo
             enddo
         enddo
 
