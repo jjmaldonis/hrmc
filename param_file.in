@@ -2,8 +2,8 @@
 models/Al92_Sm8_1220atoms_start.xyz
 data/Al92Sm8_fem.txt
 potentials/reformatted/Al90Sm10_MendelevM_2014.eam.fs
-0 4000000       # starting step, ending step
-30.0 1.5 50000  # starting temp (assuming s=0), starting max_move, how often we decrement both
+0 4000000		# starting step, ending step
+315.0 1.5 50000  # starting temp (assuming s=0), starting max_move, how often we decrement both
 2               # number of atomic species
 2.252 2.252
 2.252 2.252

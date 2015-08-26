@@ -1,46 +1,68 @@
-import sys, math
+import sys, math, random
 import numpy as np
+
+rand = lambda: 1.0-random.random()
 
 def main():
     # Import a file containing values for del-chi for the first ~1000 moves
     acceptance = 0.90
-    delfile = sys.argv[1]
-    content = open(delfile).readlines()
-    content = [float(line.strip()) for line in content]
+    kb = 8.6171e-05
+    jobfile = sys.argv[1]
 
-    values = [abs(x) for x in content]
-    values = np.array(values)
-    h,xx = np.histogram(values,bins=100)
-    xx = [(xx[i-1]+xx[i])/2.0 for i in range(1,len(xx))]
-    remove = []
-    for i,x in enumerate(h):
-        if x == 0:
-            remove.append(i)
-    xx = np.delete(xx,remove)
-    h = [math.log(x) for x in h if x!=0]
-    tau = - np.polyfit(xx,h,1)[0]
-    temp = 1.0/tau*math.log(1-acceptance/2.0) / (8.6171e-05*math.log(acceptance))
-    print("Try Temperature = {0} if you want a starting acceptance rate of {1}%".format(temp,acceptance*100))
+    content = []
+    start = False
+    i = 0
+    for line in open(jobfile):
+        if 'Starting step' in line:
+            start = True
+        if start:
+            if 'Del-chi' in line:
+                i += 1
+                x = float(line.strip().split('=')[1])
+                #if x < 0: continue
+                #if x == 0: x = 1e-14
+                content.append(x)
+            if i > 50000:
+                break
+ 
+    #delfile = sys.argv[1]
+    #content = open(delfile).readlines()
+    #content = [float(line.strip()) for line in content]
 
-    ## Use this to check if you have enough points
-    ## Plot jason.txt in Igor and see if it has converged.
-    #f = open('jason.txt','w')
-    #for i in range(100,len(content),100):
-    #    values = [abs(x) for x in content[0:i]]
-    #    values = np.array(values)
-    #    h,xx = np.histogram(values,bins=100)
-    #    xx = [(xx[i-1]+xx[i])/2.0 for i in range(1,len(xx))]
-    #    remove = []
-    #    for i,x in enumerate(h):
-    #        if x == 0:
-    #            remove.append(i)
-    #    xx = np.delete(xx,remove)
-    #    h = [math.log(x) for x in h if x!=0]
-    #    tau = - np.polyfit(xx,h,1)[0]
-    #    temp = 1.0/tau*math.log(1-acceptance/2.0) / (8.6171e-05*math.log(acceptance))
-    #    f.write('{0}\n'.format(temp))
-    #f.close()
+    #values = [math.exp(-x/(kb*T)) for x in content]
+    values = [x for x in content]
+    T = 50
+    dt = 10
 
+    I = 100
+    J = 300
+    i = 0
+    j = 0
+    of = open('temperature.txt', 'w')
+    avgs = [0 for i in range(J)]
+    while True:
+        rs = [rand() for x in values]
+        compare = [-kb*T*math.log(r) for r in rs]
+        val = sum(compare[i] > values[i] for i in range(len(values)))
+        val = float(val)/len(values)
+        avgs[j] = T #val/(1+abs(acceptance-val))
+        print(T, val, j, sum(avgs)/len(avgs), dt)
+        of.write("{0}  {1}\n".format(T, val))
+        if val < acceptance:
+            T += dt
+        elif val > acceptance:
+            T -= dt
+        else:
+            break
+        if i >= I-1:
+            dt = dt/2.0
+            i = -1
+        if j >= J-1:
+            j = -1
+        i += 1
+        j += 1
+    print(T)
+    of.close()
 
 
 if __name__ == '__main__':
