@@ -402,7 +402,7 @@ endif
 
             ! Periodically save data.
             if(myid .eq. 0) then
-            if(mod(i,1000)==0 .and. i .gt. step_start)then
+            if(mod(i,HRMC_STEPS)==0 .and. i .gt. step_start)then
                 write(output_model_fn, "(A12)") "model_update"
                 write(step_str,*) i
                 output_model_fn = trim(trim(trim(trim(output_model_fn)//jobID)//"_")//adjustl(step_str))//".xyz"
