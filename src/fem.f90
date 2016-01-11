@@ -6,13 +6,13 @@
 
 module fem_mod
     use  model_mod
-    use  RMC_Global
+    use  HRMC_Global
     use  scattering_factors 
 
     implicit none
     private
-    public :: fem_initialize, fem, I_average !femsim
-    public:: fem_update, fem_accept_move, fem_reject_move !rmc
+    public :: fem_initialize, fem, I_average !for femsim
+    public:: fem_update, fem_accept_move, fem_reject_move !for hrmc
     public :: write_intensities
     public :: write_time_in_int, print_sampled_map
     !public :: print_image1, print_image2
@@ -576,7 +576,7 @@ contains
 
         deallocate(psum_int, psum_int_sq, sum_int, sum_int_sq)
 
-        time_in_int = 0.0 ! Reset for RMC.
+        time_in_int = 0.0 ! Reset for HRMC.
     end subroutine fem
 
     subroutine intensity(m_int, res, px, py, k, int_i, int_i_as, scatfact_e, istat, square_pixel, use_autoslice)

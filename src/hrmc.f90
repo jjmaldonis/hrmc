@@ -1,7 +1,7 @@
 
 ! Reverse Monte Carlo structural simulation
 !
-! Performs RMC refinement against reduced density
+! Performs HRMC refinement against reduced density
 ! function data from electron, x-ray, or neutron
 ! diffraction data and against fluctuation electron
 ! microscopy V(k) data.
@@ -10,18 +10,18 @@
 ! Paul Voyles, begun 12/16/08
 ! 
 
-program rmc
+program hrmc
 
 #ifdef USE_LMP
     use LAMMPS
 #endif
     use omp_lib
-    use rmc_global
+    use hrmc_global
     use readinputs
     use model_mod
     use gr_mod
     use fem_mod
-    use rmc_functions
+    use hrmc_functions
     use eam_mod
     implicit none
     include 'mpif.h'
@@ -33,7 +33,7 @@ program rmc
     character (len=512) :: lmp_cmd_str
 #endif
     !integer :: prev_moved_atom = 0, n
-    ! RMC / Femsim objects
+    ! HRMC / Femsim objects
     type(model) :: m
     character (len=256) :: model_filename
     character (len=256) :: param_filename
@@ -63,7 +63,7 @@ program rmc
 #ifndef USE_LMP
     double precision :: te1, te2 ! For eam, not lammps version of energy
 #endif
-    logical :: square_pixel, accepted, use_rmc, use_multislice
+    logical :: square_pixel, accepted, use_hrmc, use_multislice
     integer :: ipvd, nthr
     doubleprecision :: t0, t1, t2 !timers
     real :: x! This is the parameter we will use to fit vsim to vas.
@@ -171,10 +171,10 @@ endif
     res = 0.61/Q
     nk = size(k)
     beta=1./((8.6171e-05)*temperature)
-    square_pixel = .TRUE. ! RMC uses square pixels, not round.
+    square_pixel = .TRUE. ! HRMC uses square pixels, not round.
     use_multislice = .FALSE.
-    use_rmc = .TRUE.
-    if(trim(jobID) == '_femsim') use_rmc = .false.
+    use_hrmc = .TRUE.
+    if(trim(jobID) == '_femsim') use_hrmc = .false.
 
 
 #ifdef USE_LMP
@@ -218,11 +218,11 @@ endif
         close(52)
     endif
 
-    !------------------- Start RMC. -----------------!
+    !------------------- Start HRMC. -----------------!
 
     call mpi_barrier(mpi_comm_world, mpierr)
 
-    if(use_rmc) then ! End here if we only want femsim. Set the variable above.
+    if(use_hrmc) then ! End here if we only want femsim. Set the variable above.
 
         ! Calculate initial chi2
         chi2_no_energy = chi_square(alpha,vk_exp, vk_exp_err, vk, scale_fac, nk)
@@ -266,7 +266,7 @@ endif
 
 
         t0 = omp_get_wtime()
-        ! RMC loop begins. The loop never stops.
+        ! HRMC loop begins. The loop never stops.
         do while (i .le. step_end)
 #ifdef TIMING
             t2 = omp_get_wtime()
@@ -333,7 +333,7 @@ endif
                 call update_scale_factor(scale_fac, scale_fac_initial, vk, vk_as)
             else
                 call fem_update(m, w, res, k, vk, vk_as, v_background, scatfact_e, mpi_comm_world, istat, square_pixel, .false.)
-                !write(*,*) "I am core", myid, "and I have exited from fem_update into the main rmc block."
+                !write(*,*) "I am core", myid, "and I have exited from fem_update into the main hrmc block."
             endif
 
             chi2_no_energy = chi_square(alpha, vk_exp, vk_exp_err, vk, scale_fac, nk)
@@ -469,12 +469,12 @@ endif
                 endif
             endif
 
-        enddo !RMC do loop
+        enddo !HRMC do loop
         if(myid.eq.0) then
         write(*,*) "Monte Carlo Finished!"
         endif
 
-        ! The rmc loop finished. Write final data.
+        ! The hrmc loop finished. Write final data.
         if(myid.eq.0)then
             ! Write to param_resume.in file
             open(unit=53,file=trim(paramfile_restart),form='formatted',status='unknown')
@@ -517,7 +517,7 @@ endif
             close(57)
 #endif
         endif
-    endif ! Use RMC
+    endif ! Use HRMC
 
 #ifdef USE_LMP
     if(myid.eq.0) then
@@ -526,4 +526,4 @@ endif
 #endif
     call mpi_finalize(mpierr)
 
-end program rmc
+end program hrmc

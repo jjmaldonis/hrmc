@@ -1,6 +1,6 @@
 #!/bin/sh
 
-#SBATCH --job-name=rmc                  # job name
+#SBATCH --job-name=hrmc                  # job name
 #SBATCH --partition=univ                # default "univ" if not specified
 #SBATCH --error=job.%J.err              # error file
 #SBATCH --output=job.%J.out             # output file
@@ -30,7 +30,7 @@ echo ""
 cat $@
 
 # Executable
-mpirun rmc $SLURM_JOB_ID $@
+mpirun hrmc $SLURM_JOB_ID $@
 
 echo "Finished on:"
 date

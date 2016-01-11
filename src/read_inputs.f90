@@ -10,7 +10,7 @@ contains
     subroutine read_inputs(param_filename, model_fn, femfile, eam_file, step_start, step_end, temp_move_decrement, temperature, max_move, cutoff_r, iseed2, alpha, V, k, V_err, V_background, ntheta, nphi, npsi, scale_fac, Q, status2)
 
     !param_filename=input file name containing initilizing parameters
-    !temperature=beginning temperature for RMC
+    !temperature=beginning temperature for HRMC
     !max_move=maximum allowable movement distance
     !cutoff_r=cut off distance for different pairs
     !alpha = chi2 weighting factor

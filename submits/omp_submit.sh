@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # declare a name for this job (replace <jobname> with something more descriptive)
-#$ -N rmc
+#$ -N hrmc
 
 # request the queue for this job
 # replace <queue_name> with queue_name e.g all.q
@@ -46,5 +46,5 @@ echo "Got $NSLOTS processors."
 # MPI_HOME is probably the same as the already-set MPIHOME.
 MPI_HOME=/share/apps/openmpi_intel_20130712/bin
 
-$MPI_HOME/mpiexec -n $NSLOTS rmc $JOB_ID
-##$MPI_HOME/mpiexec -n $NSLOTS amplxe-cl -r my_result -collect hotspots -- rmc $JOB_ID
+$MPI_HOME/mpiexec -n $NSLOTS hrmc $JOB_ID
+##$MPI_HOME/mpiexec -n $NSLOTS amplxe-cl -r my_result -collect hotspots -- hrmc $JOB_ID

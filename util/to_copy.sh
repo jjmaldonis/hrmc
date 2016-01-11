@@ -28,9 +28,9 @@ do
     # Copy the submit files we need
     cp hrmc/submits/stampede_submit.py r$i/submits
     cp hrmc/submits/stampede_submit.sh r$i/submits
-    # Symbolic link to hrmc/rmc -- don't forget to make it!
-    if [ ! -h "r$i/rmc" ]; then
-        ln -s /work/02916/maldonis/PdSi/t3/hrmc/rmc r$i/rmc
+    # Symbolic link to hrmc/hrmc -- don't forget to make it!
+    if [ ! -h "r$i/hrmc" ]; then
+        ln -s /work/02916/maldonis/PdSi/t3/hrmc/hrmc r$i/hrmc
     fi
 done
 

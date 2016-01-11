@@ -17,7 +17,7 @@ module eam_mod
 contains
 
     ! Reads tabulated eam potential data
-    ! Only called once in rmc to initialize data.
+    ! Only called once in hrmc to initialize data.
     subroutine read_eam(m,eamfile)
         implicit none
         type(model), intent(in) :: m
@@ -119,7 +119,7 @@ contains
 
 
     ! Calculates initial energy of model using eam potential
-    ! Only called once in rmc. Not used in Femsim of course.
+    ! Only called once in hrmc. Not used in Femsim of course.
     subroutine eam_initial(m, te1)
         implicit none
         type(model), intent(in) :: m
@@ -225,7 +225,7 @@ contains
 
 
     ! Calculates initial energy of model using eam potential
-    ! Called in rmc loop.
+    ! Called in hrmc loop.
     subroutine eam_mc(m, w, xx_cur, yy_cur, zz_cur, xx_new, yy_new, zz_new, te2)
         implicit none
         type(model), intent(in) :: m

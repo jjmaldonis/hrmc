@@ -20,7 +20,7 @@
 
 ## WHEN SWITCHING! between MPI and MPI+OMP remember to change:
 ## the queue; the number of cores/nodes submitted on; fem1_v2.f90; and the number of rotations;
-## change rmc stopping point to/from 100 steps and change how we accept moves
+## change hrmc stopping point to/from 100 steps and change how we accept moves
 
 # request 48 hours of wall time, if you need longer time please contact system admin
 #$ -l h_rt=INFINITY
@@ -52,8 +52,8 @@ cat param_file.in
 # MPI_HOME is probably the same as the already-set MPIHOME.
 MPI_HOME=/share/apps/openmpi_intel_20130712/bin
 
-$MPI_HOME/mpiexec -n $NSLOTS rmc $JOB_ID
-##$MPI_HOME/mpiexec -n $NSLOTS amplxe-cl -r my_result -collect hotspots -- rmc $JOB_ID
+$MPI_HOME/mpiexec -n $NSLOTS hrmc $JOB_ID
+##$MPI_HOME/mpiexec -n $NSLOTS amplxe-cl -r my_result -collect hotspots -- hrmc $JOB_ID
 
 echo "Finished on:"
 date '+%s'

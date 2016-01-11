@@ -7,7 +7,7 @@
 !
 
 
-MODULE rmc_functions
+MODULE hrmc_functions
 
   use model_mod
   implicit none
@@ -220,4 +220,4 @@ CONTAINS
   end subroutine random_move
 
 
-END MODULE rmc_functions
+END MODULE hrmc_functions

@@ -20,11 +20,11 @@
 
 !subroutine accept_gr
 !Updates gr with new ones.
-!Should be called when rmc accepts the new position.
+!Should be called when hrmc accepts the new position.
 
 !subroutine reject_gr
 !Returns gr to the old one.
-!Should be called when rmc rejects the new position.
+!Should be called when hrmc rejects the new position.
 
 !subroutine gr_hutch
 !Does the same thing as the subroutine gr_no_hutch, but this subroutine uses hutch algorithm.
@@ -475,7 +475,7 @@ contains
         m%xx%ind(w) = xx_cur
         m%yy%ind(w) = yy_cur
         m%zz%ind(w) = zz_cur !revisded by Feng Yi on 03/03/2009
-        !uncommented by Feng Yi on 03/06/2009 for compatibility with random_move in rmc_functions.f90
+        !uncommented by Feng Yi on 03/06/2009 for compatibility with random_move in hrmc_functions.f90
 
         call hutch_list_3D(m, m%xx%ind(w), m%yy%ind(w), m%zz%ind(w), radius, atoms, istat, nlist)
 
@@ -664,7 +664,7 @@ contains
 
 
     !Updates  gr with new ones.
-    !Should be called when rmc accepts the new position.
+    !Should be called when hrmc accepts the new position.
     subroutine accept_gr(m, used_data_sets)
         implicit none
         type(model), intent(inout) :: m
@@ -704,7 +704,7 @@ contains
 
 
     !Retruns gr to the old one.
-    !Should be called when rmc rejects the new position.
+    !Should be called when hrmc rejects the new position.
     subroutine reject_gr(m,used_data_sets)
         implicit none
         type(model), intent(inout) :: m

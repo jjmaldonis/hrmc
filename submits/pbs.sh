@@ -8,4 +8,4 @@ echo $PBS_O_WORKDIR
 cd $PBS_O_WORKDIR
 pwd
 ls -l
-aprun -n $PBS_NNODES ./rmc $PBS_JOBID /lustre/medusa/maldonis/Al92Sm8/hrmc/param_file.2000000.in
+aprun -n $PBS_NNODES ./hrmc $PBS_JOBID /lustre/medusa/maldonis/Al92Sm8/hrmc/param_file.2000000.in

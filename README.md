@@ -54,7 +54,7 @@ Lines below start with the line number in the parameter file. See param_file.in 
 \<Q>:  Q = 0.61/(FEM experimental resolution). Make sure the units match those in the modelfile. Use Angstroms.
 
 ### Other notable parameters not in the parameter file
-There is a "do while" loop in rmc.f90 that specifies how long to run for. I recommend running indefinitely, and manually cancelling the job when you decide it is done based on the contents of chi_squared.txt. However, if your cluster only lets you run for a certain amount of time, you may need to modify this.
+There is a "do while" loop in hrmc.f90 that specifies how long to run for. I recommend running indefinitely, and manually cancelling the job when you decide it is done based on the contents of chi_squared.txt. However, if your cluster only lets you run for a certain amount of time, you may need to modify this.
 
 # How the simulation works
 HRMC stands for Hybrid Reverse Monte Carlo. Monte Carlo (MC) is the simulation method. Reverse means we refine against experimental data. Hybrid means we refine against an energetic potential as well as experimental data.
@@ -66,7 +66,7 @@ The simulation of the experimental data, in our case the variance of a set of in
 ### Rotations
 The number of rotations in the model can vary, we typically set it to 1 40 20 = 211 rotations. That means the intensity calculation is being done that many times, once for each rotation, and then combined into the V(k) curve for experimental comparison.
 
-Note that the first rotation should be 0 0 0, so that the first model in the rotation array (mrot) is identical to the model in rmc.f90.
+Note that the first rotation should be 0 0 0, so that the first model in the rotation array (mrot) is identical to the model in hrmc.f90.
 
 ### Pixels
 The model must obey periodic boundary conditions, and therefore must be rectangular. It is futhermore necessary that the model is cubic, not just rectangular. Every atom in the model must contribute once and only once to the intensity calculation (per rotation). With round pixels (which correctly represents the exeriment) atoms will either overlap (square inscribed in circle; periodic bound conditions) or atoms will not be included at all in the intensity calculation (cirle inscribed in square). We therefore use square pixels instead of round pixels so that every atom contributes once and only once.

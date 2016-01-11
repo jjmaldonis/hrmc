@@ -18,7 +18,7 @@ def run_subproc(args):
 
 def submit_job(paramfile, prev_jobid, s, es):
     """ Pass None to prev_jobid if using param_file.in as paramfile """
-    
+
     # Call sed to change starting step number to s
     args = "sed -i '5s/.*/{0} {1}\t\t# starting step, ending step/' {2}".format(s,es,paramfile)
     pcomm = run_subproc(args)

@@ -11,7 +11,7 @@
 ! fails.
 
 module model_mod
-    use RMC_Global  ! Global variables
+    use HRMC_Global  ! Global variables
     implicit none
     ! derived data type for the hutches.  at is a pointer to a list
     ! of the indices

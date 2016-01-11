@@ -23,5 +23,5 @@ src/ran2__genmod.f90
 *.restart
 src/*.o
 src/*.mod
-rmc
+hrmc
 temp*

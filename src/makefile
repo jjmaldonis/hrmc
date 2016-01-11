@@ -1,9 +1,9 @@
 
 
 
-APP = ../rmc
+APP = ../hrmc
 
-SRC = ran2.f90 globals.f90 read_inputs_v2.f90 model_v2.f90 rmc_functions.f90 scattering_factors.f90 fft2dc.c slicelib.c islice.c fem1_v2.f90 gr.f90 eam_fs.f90 rmc_v_1_0.f90
+SRC = ran2.f90 globals.f90 read_inputs.f90 model.f90 rmc_functions.f90 scattering_factors.f90 fft2dc.c slicelib.c islice.c fem.f90 gr.f90 eam_fs.f90 hrmc.f90
 OBJ = $(addsuffix .o, $(basename $(SRC)))
 
 #USE_LMP = -DUSE_LMP #Uncomment if you want to use lammps

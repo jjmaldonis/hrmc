@@ -18,14 +18,14 @@ def run_subproc(args):
 
 def submit_job(paramfile, prev_jobid, s, es):
     """ Pass None to prev_jobid if using param_file.in as paramfile """
-    
+
     # Call sed to change starting step number to s
     args = "sed -i '5s/.*/{0} {1}\t\t# starting step, ending step/' {2}".format(s, es, paramfile)
     pcomm = run_subproc(args)
 
     # Do the submitting
     if(prev_jobid == None):
-        args = "sed -i '11s/.*/aprun \-n $PBS_NNODES .\/rmc $PBS_JOBID {0}/' {1}".format(paramfile.replace('/', '\/'), 'submits/pbs.sh')
+        args = "sed -i '11s/.*/aprun \-n $PBS_NNODES .\/hrmc $PBS_JOBID {0}/' {1}".format(paramfile.replace('/', '\/'), 'submits/pbs.sh')
         pcomm = run_subproc(args)
         #args = "qsub submits/pbs.sh {0}".format(paramfile)
         args = "qsub submits/pbs.sh"
@@ -33,7 +33,7 @@ def submit_job(paramfile, prev_jobid, s, es):
         # Call sed to change modelfile based on previous job id
         args = "sed -i '2s/.*/model_final_{0}.ocoee.nics.utk.edu.xyz/' {1}".format(prev_jobid,paramfile)
         pcomm = run_subproc(args)
-        args = "sed -i '11s/.*/aprun \-n $PBS_NNODES .\/rmc $PBS_JOBID {0}/' {1}".format(paramfile.replace('/', '\/'), 'submits/pbs.sh')
+        args = "sed -i '11s/.*/aprun \-n $PBS_NNODES .\/hrmc $PBS_JOBID {0}/' {1}".format(paramfile.replace('/', '\/'), 'submits/pbs.sh')
         pcomm = run_subproc(args)
         #args = "qsub --depend=afterok:{0} submits/pbs.sh {1}".format(prev_jobid,paramfile)
         args = "qsub -W depend=afterok:{0} submits/pbs.sh".format(prev_jobid)

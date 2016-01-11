@@ -35,7 +35,7 @@ echo ""
 cat $@
 
 # Executable
-ibrun ./rmc $SLURM_JOB_ID $@
+ibrun ./hrmc $SLURM_JOB_ID $@
 
 echo "Finished on:"
 date
