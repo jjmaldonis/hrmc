@@ -54,12 +54,12 @@ program hrmc
     double precision :: chi2_old, chi2_new, del_chi, chi2_gr, chi2_vk, chi2_no_energy, chi2_initial
     real :: R
     integer :: i, j, step_start, step_end
-    integer :: w
+    integer :: w, a1, a2
     integer :: nk
     integer :: ntheta, nphi, npsi
     integer :: istat, status2, length
     integer :: iseed2
-    real :: randnum
+    real :: randnum, randnum2
 #ifndef USE_LMP
     double precision :: te1, te2 ! For eam, not lammps version of energy
 #endif
@@ -283,18 +283,30 @@ endif
             endif
 #endif
 
-            call random_move(m,w,xx_cur,yy_cur,zz_cur,xx_new,yy_new,zz_new, max_move)
-            ! check_curoffs returns false if the new atom placement is too close to
-            ! another atom. Returns true if the move is okay. (hard shere cutoff)
-            do while( .not. check_cutoffs(m,cutoff_r,w) )
-                ! Check_cutoffs returned false so reset positions and try again.
-                m%xx%ind(w) = xx_cur
-                m%yy%ind(w) = yy_cur
-                m%zz%ind(w) = zz_cur
+            randnum2 = ran2(iseed2)
+            if(randnum2 .le. 0.05) then
+                w = 1
+                xx_cur = m%xx%ind(w)
+                yy_cur = m%yy%ind(w)
+                zz_cur = m%zz%ind(w)
+                xx_new = m%xx%ind(w)
+                yy_new = m%yy%ind(w)
+                zz_new = m%zz%ind(w)
+                call random_znum_swap(m, a1, a2, iseed2)
+            else
                 call random_move(m,w,xx_cur,yy_cur,zz_cur,xx_new,yy_new,zz_new, max_move)
-            end do
-            ! Update hutches, data for chi2, and chi2/del_chi
-            call hutch_move_atom(m,w,xx_new, yy_new, zz_new)
+                ! check_curoffs returns false if the new atom placement is too close to
+                ! another atom. Returns true if the move is okay. (hard shere cutoff)
+                do while( .not. check_cutoffs(m,cutoff_r,w) )
+                    ! Check_cutoffs returned false so reset positions and try again.
+                    m%xx%ind(w) = xx_cur
+                    m%yy%ind(w) = yy_cur
+                    m%zz%ind(w) = zz_cur
+                    call random_move(m,w,xx_cur,yy_cur,zz_cur,xx_new,yy_new,zz_new, max_move)
+                end do
+                ! Update hutches, data for chi2, and chi2/del_chi
+                call hutch_move_atom(m,w,xx_new, yy_new, zz_new)
+            endif
     
 #ifdef USE_LMP
             write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", w, " x ", xx_new, " y ", yy_new, " z ", zz_new
@@ -312,18 +324,22 @@ endif
             ! Decide whether to reject just based on the energy
             accepted = .true.
             if(chi2_initial*0.1 > chi2_no_energy) then
-            if(log(1.0-randnum) > -(te2-chi2_old)*beta) then
-                accepted = .false.
-                call reject_position(m, w, xx_cur, yy_cur, zz_cur)
-                call hutch_move_atom(m,w,xx_cur, yy_cur, zz_cur)  !update hutches.  
+                if(log(1.0-randnum) > -(te2-chi2_old)*beta) then
+                    accepted = .false.
+                    if(randnum2 .le. 0.05) then
+                        call znum_swap(m, a2, a1)
+                    else
+                        call reject_position(m, w, xx_cur, yy_cur, zz_cur)
+                        call hutch_move_atom(m,w,xx_cur, yy_cur, zz_cur)  !update hutches.  
+                    endif
 #ifndef USE_LMP
-                e2 = e1 ! eam
+                    e2 = e1 ! eam
 #else
-                write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", w, " x ", xx_cur, " y ", yy_cur, " z ", zz_cur
-                call lammps_command(lmp, trim(lmp_cmd_str))
+                    write(lmp_cmd_str, "(A9, I4, A3, F, A3, F, A3, F)") "set atom ", w, " x ", xx_cur, " y ", yy_cur, " z ", zz_cur
+                    call lammps_command(lmp, trim(lmp_cmd_str))
 #endif
-                if(myid.eq.0) write(*,*) "MC move rejected solely due to energy."
-            endif
+                    if(myid.eq.0) write(*,*) "MC move rejected solely due to energy."
+                endif
             endif
                 
             if(accepted) then
@@ -374,8 +390,12 @@ endif
                     if(myid.eq.0) write(*,*) "MC move accepted due to probability. del_chi*beta = ", del_chi*beta
                 else
                     ! Reject move
-                    call reject_position(m, w, xx_cur, yy_cur, zz_cur)
-                    call hutch_move_atom(m,w,xx_cur, yy_cur, zz_cur)  !update hutches.
+                    if(randnum2 .le. 0.05) then
+                        call znum_swap(m, a2, a1)
+                    else
+                        call reject_position(m, w, xx_cur, yy_cur, zz_cur)
+                        call hutch_move_atom(m,w,xx_cur, yy_cur, zz_cur)  !update hutches.
+                    endif
                     call fem_reject_move(m, w, xx_cur, yy_cur, zz_cur, mpi_comm_world)
 #ifndef USE_LMP
                     e2 = e1 ! eam

@@ -220,4 +220,44 @@ CONTAINS
   end subroutine random_move
 
 
+  subroutine znum_swap(m, a1, a2)
+    use mpi  
+    type(model), intent(inout) :: m
+    integer, intent(inout) :: a1, a2
+    integer :: temp
+    temp = m%znum%ind(a1)
+    m%znum%ind(a1) = m%znum%ind(a2)
+    m%znum%ind(a2) = temp
+
+    temp = m%znum_r%ind(a1)
+    m%znum_r%ind(a1) = m%znum_r%ind(a2)
+    m%znum_r%ind(a2) = temp
+  end subroutine znum_swap
+
+  ! Swaps the atomic number of two random atoms
+  ! Makes sure that the atomic numbers are different
+  subroutine random_znum_swap(m, a1, a2, iseed)
+    use mpi  
+    type(model), intent(inout) :: m
+    integer, intent(in) :: iseed
+    integer, intent(inout) :: a1, a2
+    real :: rand1, rand2
+
+    rand1 = ran2(iseed)
+    rand2 = ran2(iseed)
+    a1 = int(m%natoms*rand1)+1
+    a2 = int(m%natoms*rand2)+1
+
+    do while( m%znum%ind(a1) .eq. m%znum%ind(a2) )
+        rand1 = ran2(iseed)
+        rand2 = ran2(iseed)
+        a1 = int(m%natoms*rand1)+1
+        a2 = int(m%natoms*rand2)+1
+    end do
+
+    call znum_swap(m, a1, a2)
+
+  end subroutine random_znum_swap
+
+
 END MODULE hrmc_functions
