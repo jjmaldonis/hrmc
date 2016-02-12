@@ -1,5 +1,5 @@
 #parameter file opened. set a filename to # to ignore it
-models/Al92_Sm8_1220atoms_start.xyz
+models/Al92Sm8_615atoms_start.xyz
 data/Al92Sm8_fem.txt
 potentials/reformatted/Al90Sm10_MendelevM_2014.eam.fs
 0 4000000		# starting step, ending step
