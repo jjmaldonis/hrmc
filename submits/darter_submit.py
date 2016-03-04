@@ -44,7 +44,7 @@ def submit_job(paramfile, prev_jobid, s, es):
 
 def main():
     """ If you want to resume a job, all you have to do is change ss """
-    ts = 4000000 # total number of steps in the simulation
+    ts = 32000000 # total number of steps in the simulation
     js = 1500000 # number of steps per job
     ss = 0 # starting step, this number gets changed in the loop ~ incremented by js on each submit
     starting_param_filename = 'param_file.in' # It is expected that the starting parameters in here are correct

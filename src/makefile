@@ -17,7 +17,7 @@ endif
 
 LIBS=
 
-FC = ftn
+FC = mpif90 #ftn
 CC = icc
 
 
