@@ -1,14 +1,14 @@
 #parameter file opened. set a filename to # to ignore it
-models/Al92Sm8_large_cgm.xyz
-data/Al92Sm8_fem.txt
-potentials/reformatted/Al90Sm10_MendelevM_2014.eam.fs
+models/Pd82Si18_large_cgm.xyz
+data/fem_Pd82Si18_as_quenched.txt
+potentials/reformatted/PdSi.lammps.eam
 0 32000000		# starting step, ending step
-315.0 1.5 400000 # starting temp (assuming s=0), starting max_move, how often we decrement both
+240.0 1.5 400000 # starting temp (assuming s=0), starting max_move, how often we decrement both
 2               # number of atomic species
-2.252 2.252
-2.252 2.252
+2.22 2.22
+2.22 2.22
 10475           # seed
 0.0256	        # weighting factor between E and chi2
-16.97056        # thickness scaling factor
+13.78858        # thickness scaling factor
 1 40 20     	# of rotations(nphi, npsi, ntheta), use 1 40 20
 0.0305          # Q (inverse angstrom)
