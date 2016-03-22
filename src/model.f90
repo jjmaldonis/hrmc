@@ -881,12 +881,12 @@ contains
         end if
 
         ! Jason 20130722 Made this part much better.
-        x_start = px-radius
-        x_end = px+radius
-        y_start = py-radius
-        y_end = py+radius
-        z_start = pz-radius
-        z_end = pz+radius
+        x_start = px-radius*0.99999
+        x_end = px+radius*0.99999
+        y_start = py-radius*0.99999
+        y_end = py+radius*0.99999
+        z_start = pz-radius*0.99999
+        z_end = pz+radius*0.99999
         !write(*,*) "radius=", radius
         !write(*,*) "x_start, x_end=", x_start, x_end
         !write(*,*) "y_start, y_end=", y_start, y_end
@@ -1040,10 +1040,10 @@ contains
         ! still in the square.
 
         ! Jason 20130722 Made this part much better.
-        x_start = px-diameter/2.0
-        x_end = px+diameter/2.0
-        y_start = py-diameter/2.0
-        y_end = py+diameter/2.0
+        x_start = px-diameter/2.000001
+        x_end = px+diameter/2.000001
+        y_start = py-diameter/2.000001
+        y_end = py+diameter/2.000001
         if(x_start < -m%lx/2.0) x_start = x_start + m%lx !PBC
         if(x_end > m%lx/2.0) x_end = x_end - m%lx !PBC
         if(y_start < -m%ly/2.0) y_start = y_start + m%ly !PBC
