@@ -3,7 +3,7 @@ models/Pd82Si18_large_cgm.xyz
 data/fem_Pd82Si18_as_quenched.txt
 potentials/reformatted/PdSi.lammps.eam
 0 32000000		# starting step, ending step
-240.0 1.5 400000 # starting temp (assuming s=0), starting max_move, how often we decrement both
+100.0 1.5 400000 # starting temp (assuming s=0), starting max_move, how often we decrement both
 2               # number of atomic species
 2.22 2.22
 2.22 2.22
