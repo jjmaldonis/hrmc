@@ -172,7 +172,7 @@ contains
         character (len=*),intent(out) :: comment
         type(model), intent(out) :: m
         integer, intent(out) :: istat      !0 for successful open, others for failure.
-        integer :: i, j, atom_count=0, atom_temp
+        integer :: i, j, atom_temp
         integer, dimension(103) :: elements=0
         real :: comp_temp
         character(3) :: sym
@@ -1120,7 +1120,6 @@ contains
         integer, dimension(:), allocatable, target :: temp_atoms
         integer :: i_start, i_end, j_start, j_end, trash
         real :: x_start, x_end, y_start, y_end
-        !logical :: found
 
         !write(*,*) "Number of hutches in the x, y, and z directions:", m%ha%nhutch_x, m%ha%nhutch_y, m%ha%nhutch_z
         allocate(temp_atoms(m%natoms), stat=istat)
@@ -1130,18 +1129,16 @@ contains
         end if
 
         ! Jason 20130722 Made this part much better.
-        x_start = px-diameter/2.0
-        x_end = px+diameter/2.0
-        y_start = py-diameter/2.0
-        y_end = py+diameter/2.0
+        x_start = px-diameter/2.000001
+        x_end = px+diameter/2.000001
+        y_start = py-diameter/2.000001
+        y_end = py+diameter/2.000001
         if(x_start < -m%lx/2.0) x_start = x_start + m%lx !PBC
         if(x_end > m%lx/2.0) x_end = x_end - m%lx !PBC
         if(y_start < -m%ly/2.0) y_start = y_start + m%ly !PBC
         if(y_end > m%ly/2.0) y_end = y_end - m%ly !PBC
         call hutch_position(m, x_start, y_start, 0.0, i_start, j_start, trash)
         call hutch_position(m, x_end, y_end, 0.0, i_end, j_end, trash)
-        !write(*,*) "i_start, i_end=", i_start, i_end
-        !write(*,*) "j_start, j_end=", j_start, j_end
         nh = (i_end-i_start+1)*(j_end-j_start+1)*(m%ha%nhutch_z)
         
         ! Fill in the list.
